@@ -1,17 +1,65 @@
-"""Google Drive 本地同步檔案操作（v2.1 — 結構化資料夾管理）"""
+"""Google Drive 本地同步檔案操作（v2.2 — 結構化資料夾管理 + 掛載 fallback）"""
 
 import json
 import logging
 import os
+import re
 import shutil
 from datetime import datetime
 from pathlib import Path
 
 logger = logging.getLogger("shanbot.gdrive")
 
-GDRIVE_LOCAL = os.environ.get(
+_GDRIVE_PRIMARY = os.environ.get(
     "GDRIVE_LOCAL", "/mnt/h/我的雲端硬碟/小魚資料/團膳公司資料"
 )
+_GDRIVE_STAGING = "/home/simon/shanbot/data/gdrive_staging"
+
+# --- 掛載可用性檢查 ---
+_USING_STAGING = False
+
+
+def _check_gdrive_available() -> bool:
+    """檢查 GDrive 路徑是否可寫（H: 磁碟已掛載且 Google Drive 同步中）"""
+    try:
+        # 先檢查 /mnt/h 是否有內容（空目錄 = 未掛載）
+        mnt_h = "/mnt/h"
+        if os.path.isdir(mnt_h) and not os.listdir(mnt_h):
+            return False
+        # 嘗試在目標路徑建立測試目錄
+        os.makedirs(_GDRIVE_PRIMARY, exist_ok=True)
+        test_file = os.path.join(_GDRIVE_PRIMARY, ".shanbot_write_test")
+        with open(test_file, "w") as f:
+            f.write("ok")
+        os.remove(test_file)
+        return True
+    except (OSError, PermissionError):
+        return False
+
+
+def _resolve_gdrive_path() -> str:
+    """決定使用真正 GDrive 路徑或暫存路徑"""
+    global _USING_STAGING
+    if _check_gdrive_available():
+        _USING_STAGING = False
+        logger.info(f"[GDrive] 使用真實路徑: {_GDRIVE_PRIMARY}")
+        return _GDRIVE_PRIMARY
+    else:
+        _USING_STAGING = True
+        os.makedirs(_GDRIVE_STAGING, exist_ok=True)
+        logger.warning(
+            f"[GDrive] H: 磁碟未掛載或不可寫，使用暫存路徑: {_GDRIVE_STAGING}"
+            " — 請確認 Windows 端 Google Drive 已啟動並掛載 H:"
+        )
+        return _GDRIVE_STAGING
+
+
+GDRIVE_LOCAL = _resolve_gdrive_path()
+
+
+def is_using_staging() -> bool:
+    """供外部查詢是否正在使用暫存路徑"""
+    return _USING_STAGING
 
 # 每月子資料夾名稱
 MONTHLY_FOLDERS = [
@@ -90,7 +138,24 @@ def _year_month_path(year_month: str) -> tuple[str, str]:
 
 
 def init_folder_structure(year_month: str | None = None) -> str:
-    """建立年/月/類別資料夾結構，回傳月路徑"""
+    """建立年/月/類別資料夾結構，回傳月路徑
+
+    啟動時會重新檢查 GDrive 掛載狀態，若掛載恢復則自動切回真實路徑。
+    """
+    global GDRIVE_LOCAL, _USING_STAGING
+
+    # 每次呼叫重新檢查掛載狀態（可能 Windows 端後來才啟動 Google Drive）
+    new_path = _resolve_gdrive_path()
+    if new_path != GDRIVE_LOCAL:
+        logger.info(f"[GDrive] 路徑切換: {GDRIVE_LOCAL} → {new_path}")
+        GDRIVE_LOCAL = new_path
+
+    if _USING_STAGING:
+        logger.warning(
+            "[GDrive] init_folder_structure: 使用暫存路徑，"
+            "檔案不會同步到 Google Drive，待 H: 掛載後需手動搬移"
+        )
+
     if not year_month:
         year_month = datetime.now().strftime("%Y-%m")
 
@@ -123,7 +188,7 @@ async def upload_receipt(
 
     # 檔名：原始檔名加上供應商前綴
     basename = os.path.basename(local_path)
-    safe_supplier = supplier.replace("/", "_").replace("\\", "_")[:20]
+    safe_supplier = re.sub(r'[\\/:*?"<>|\s]', '_', supplier or "unknown")[:20]
     dest_name = f"{safe_supplier}_{basename}"
     dest_path = os.path.join(dest_dir, dest_name)
 
@@ -182,6 +247,107 @@ async def upload_export(
     except Exception as e:
         logger.error(f"upload_export failed: {e}")
         return None
+
+
+async def archive_receipt(
+    local_path: str,
+    purchase_date: str,
+    supplier_name: str,
+    total_amount: float,
+    staging_id: int,
+    ocr_summary: dict | None = None,
+) -> dict:
+    """確認後的正式歸檔：重命名 + 存 GDrive + 寫 INDEX.csv
+
+    Args:
+        local_path: 本地圖片路徑
+        purchase_date: 'YYYY-MM-DD'
+        supplier_name: 供應商名稱
+        total_amount: 總金額
+        staging_id: 暫存記錄 ID
+        ocr_summary: OCR 摘要（可選），含 items / invoice_number / subtotal / tax_amount
+
+    Returns:
+        {"gdrive_path": "...", "filename": "...", "index_row": {...}}
+    """
+    if not ocr_summary:
+        ocr_summary = {}
+
+    # 1. 重命名：YYMMDD_供應商名_金額_#staging_id.ext
+    try:
+        date_parts = purchase_date.split("-")
+        yy = date_parts[0][2:]  # 2026 -> 26
+        mm = date_parts[1]
+        dd = date_parts[2]
+        date_prefix = f"{yy}{mm}{dd}"
+    except (IndexError, AttributeError):
+        date_prefix = datetime.now().strftime("%y%m%d")
+
+    safe_supplier = re.sub(r'[\\/:*?"<>|\s]', '_', supplier_name or "unknown")[:20]
+    amount_str = f"{int(total_amount)}" if total_amount else "0"
+    ext = os.path.splitext(local_path)[1] or ".jpg"
+    new_filename = f"{date_prefix}_{safe_supplier}_{amount_str}_#{staging_id}{ext}"
+
+    # 2. 計算目標路徑：{年}/{月}月/收據憑證/
+    year_month = purchase_date[:7] if purchase_date and len(purchase_date) >= 7 else datetime.now().strftime("%Y-%m")
+    _, month_path = _year_month_path(year_month)
+    dest_dir = os.path.join(month_path, "收據憑證")
+    os.makedirs(dest_dir, exist_ok=True)
+
+    dest_path = os.path.join(dest_dir, new_filename)
+
+    # 3. 複製檔案
+    try:
+        shutil.copy2(local_path, dest_path)
+        rel_path = os.path.relpath(dest_path, GDRIVE_LOCAL)
+        logger.info(f"Receipt archived: {local_path} -> {dest_path}")
+    except Exception as e:
+        logger.error(f"archive_receipt copy failed: {e}")
+        return {"gdrive_path": None, "filename": new_filename, "index_row": {}, "error": str(e)}
+
+    # 4. 更新 INDEX.csv
+    index_row = {
+        "日期": purchase_date,
+        "供應商": supplier_name or "",
+        "發票號碼": ocr_summary.get("invoice_number", ""),
+        "品項數": len(ocr_summary.get("items", [])),
+        "未稅金額": ocr_summary.get("subtotal", 0),
+        "稅額": ocr_summary.get("tax_amount", 0),
+        "總金額": total_amount,
+        "檔案名稱": new_filename,
+        "歸檔時間": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "來源": f"staging#{staging_id}",
+    }
+
+    try:
+        _append_index_csv(dest_dir, index_row)
+    except Exception as e:
+        logger.warning(f"INDEX.csv update failed: {e}")
+
+    return {
+        "gdrive_path": rel_path,
+        "filename": new_filename,
+        "index_row": index_row,
+    }
+
+
+def _append_index_csv(folder_path: str, row: dict):
+    """追加一行到 INDEX.csv（不存在則建立含標題行）"""
+    import csv
+
+    csv_path = os.path.join(folder_path, "INDEX.csv")
+    headers = ["日期", "供應商", "發票號碼", "品項數", "未稅金額",
+               "稅額", "總金額", "檔案名稱", "歸檔時間", "來源"]
+
+    file_exists = os.path.exists(csv_path)
+
+    with open(csv_path, "a", newline="", encoding="utf-8-sig") as f:
+        writer = csv.DictWriter(f, fieldnames=headers)
+        if not file_exists:
+            writer.writeheader()
+        writer.writerow(row)
+
+    logger.info(f"INDEX.csv updated: {csv_path} (+1 row)")
 
 
 def get_folder_index(year_month: str | None = None) -> dict:

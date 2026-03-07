@@ -217,13 +217,15 @@ class TestGetAutoPassThreshold(unittest.TestCase):
             self.assertEqual(threshold, 0.85)
 
 
+@patch("services.ocr_service.verify_einvoice", return_value=None)
+@patch("services.ocr_service.ocr_hunyuan", return_value=None)
 class TestProcessImage(unittest.TestCase):
     """process_image 整合邏輯"""
 
     @patch("services.ocr_service._get_auto_pass_threshold", return_value=0.85)
     @patch("services.ocr_service.ocr_gemini")
     @patch("services.ocr_service.ocr_paddle")
-    def test_both_engines_success(self, mock_paddle, mock_gemini, mock_threshold):
+    def test_both_engines_success(self, mock_paddle, mock_gemini, mock_threshold, _h, _e):
         from services.ocr_service import process_image
         mock_paddle.return_value = ("好鮮水產行\n高麗菜 10kg 350\n合計 350", 0.85)
         mock_gemini.return_value = {
@@ -250,7 +252,7 @@ class TestProcessImage(unittest.TestCase):
     @patch("services.ocr_service._get_auto_pass_threshold", return_value=0.85)
     @patch("services.ocr_service.ocr_gemini")
     @patch("services.ocr_service.ocr_paddle")
-    def test_both_engines_fail(self, mock_paddle, mock_gemini, mock_threshold):
+    def test_both_engines_fail(self, mock_paddle, mock_gemini, mock_threshold, _h, _e):
         from services.ocr_service import process_image
         mock_paddle.return_value = ("", 0.0)
         mock_gemini.return_value = None
@@ -258,12 +260,12 @@ class TestProcessImage(unittest.TestCase):
         result = process_image("/fake/path.jpg")
         self.assertEqual(result.confidence, 0)
         self.assertEqual(result.result_level, "REJECT")
-        self.assertIn("兩個 OCR 引擎都無法辨識", result.issues)
+        self.assertIn("所有 OCR 引擎都無法辨識", result.issues)
 
     @patch("services.ocr_service._get_auto_pass_threshold", return_value=0.85)
     @patch("services.ocr_service.ocr_gemini")
     @patch("services.ocr_service.ocr_paddle")
-    def test_paddle_only(self, mock_paddle, mock_gemini, mock_threshold):
+    def test_paddle_only(self, mock_paddle, mock_gemini, mock_threshold, _h, _e):
         from services.ocr_service import process_image
         mock_paddle.return_value = ("some text here", 0.70)
         mock_gemini.return_value = None
@@ -276,7 +278,7 @@ class TestProcessImage(unittest.TestCase):
     @patch("services.ocr_service._get_auto_pass_threshold", return_value=0.85)
     @patch("services.ocr_service.ocr_gemini")
     @patch("services.ocr_service.ocr_paddle")
-    def test_gemini_only(self, mock_paddle, mock_gemini, mock_threshold):
+    def test_gemini_only(self, mock_paddle, mock_gemini, mock_threshold, _h, _e):
         from services.ocr_service import process_image
         mock_paddle.return_value = ("", 0.0)
         mock_gemini.return_value = {
@@ -293,7 +295,7 @@ class TestProcessImage(unittest.TestCase):
     @patch("services.ocr_service._get_auto_pass_threshold", return_value=0.85)
     @patch("services.ocr_service.ocr_gemini")
     @patch("services.ocr_service.ocr_paddle")
-    def test_handwritten_penalty(self, mock_paddle, mock_gemini, mock_threshold):
+    def test_handwritten_penalty(self, mock_paddle, mock_gemini, mock_threshold, _h, _e):
         from services.ocr_service import process_image
         mock_paddle.return_value = ("合計 350", 0.90)
         mock_gemini.return_value = {
@@ -309,7 +311,7 @@ class TestProcessImage(unittest.TestCase):
     @patch("services.ocr_service._get_auto_pass_threshold", return_value=0.90)
     @patch("services.ocr_service.ocr_gemini")
     @patch("services.ocr_service.ocr_paddle")
-    def test_early_stage_stricter(self, mock_paddle, mock_gemini, mock_threshold):
+    def test_early_stage_stricter(self, mock_paddle, mock_gemini, mock_threshold, _h, _e):
         from services.ocr_service import process_image
         mock_paddle.return_value = ("合計 1000", 0.85)
         mock_gemini.return_value = {

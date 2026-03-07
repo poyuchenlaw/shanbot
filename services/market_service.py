@@ -452,8 +452,8 @@ def _parse_roc_date(roc_str: str) -> Optional[date]:
 #  每日同步
 # ============================================================
 
-def sync_all_market_data(target_date: date = None):
-    """同步所有市場行情資料（每日排程呼叫）
+def _sync_all_market_data_sync(target_date: date = None):
+    """同步所有市場行情資料（同步版本，由 async wrapper 透過 to_thread 呼叫）
 
     依序取得蔬菜、水果、豬肉、禽蛋行情並寫入快取。
     任一 API 失敗不影響其他 API 的取得。
@@ -499,6 +499,12 @@ def sync_all_market_data(target_date: date = None):
         logger.error(f"同步禽蛋行情失敗: {e}")
 
     logger.info("市場行情資料同步完成")
+
+
+async def sync_all_market_data(target_date: date = None):
+    """Async wrapper — 透過 to_thread 避免阻塞 event loop"""
+    import asyncio
+    return await asyncio.to_thread(_sync_all_market_data_sync, target_date)
 
 
 # ============================================================

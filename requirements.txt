@@ -9,9 +9,11 @@ requests>=2.31.0
 # LINE Bot
 # No SDK - using direct REST API (line_service.py)
 
-# OCR
+# OCR (三引擎: PaddleOCR PP-OCRv5 + Gemini VLM + HunyuanOCR)
 paddleocr>=3.4.0
-# PaddlePaddle installed separately per platform
+paddlepaddle>=3.3.0
+# HunyuanOCR: via HF Inference API (no local deps)
+# E-invoice API: via requests (included above)
 
 # AI/LLM
 # google-generativeai not needed - using REST API directly

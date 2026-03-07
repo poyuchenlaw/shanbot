@@ -41,6 +41,9 @@ async def handle_text(line_service, text: str, group_id: str,
         from handlers.menu_handler import handle_cost_input
         return await handle_cost_input(line_service, text, group_id, state_data)
 
+    if state == "waiting_ocr_confirm":
+        return await _handle_ocr_confirm_response(text, group_id, state_data)
+
     # 2. 確認/修改/捨棄指令
     confirm_match = re.match(r"確認\s*#?(\d+)", text)
     if confirm_match:
@@ -110,10 +113,62 @@ async def handle_text(line_service, text: str, group_id: str,
     return None
 
 
+# === 歸檔輔助函數 ===
+
+async def _do_archive(staging_id: int, staging: dict) -> str:
+    """GDrive 正式歸檔：重命名 + 收據憑證/ + INDEX.csv
+
+    Returns:
+        歸檔結果訊息字串（成功含路徑，失敗或無圖片則空字串）
+    """
+    if not staging.get("local_image_path"):
+        return ""
+
+    try:
+        from services.gdrive_service import archive_receipt
+
+        items = sm.get_purchase_items(staging_id)
+        ocr_summary = {
+            "invoice_number": staging.get("invoice_number", ""),
+            "subtotal": staging.get("subtotal", 0),
+            "tax_amount": staging.get("tax_amount", 0),
+            "items": [{"name": it["item_name"]} for it in items],
+        }
+
+        archive_result = await archive_receipt(
+            local_path=staging["local_image_path"],
+            purchase_date=staging.get("purchase_date", ""),
+            supplier_name=staging.get("supplier_name", ""),
+            total_amount=staging.get("total_amount", 0),
+            staging_id=staging_id,
+            ocr_summary=ocr_summary,
+        )
+
+        if archive_result.get("gdrive_path"):
+            sm.update_purchase_staging(
+                staging_id, gdrive_path=archive_result["gdrive_path"]
+            )
+            logger.info(
+                f"#{staging_id} archived to GDrive: {archive_result['gdrive_path']}"
+            )
+            return (
+                f"\n☁️ 已歸檔：{archive_result['filename']}"
+                f"\n📂 路徑：{archive_result['gdrive_path']}"
+            )
+        elif archive_result.get("error"):
+            logger.warning(
+                f"#{staging_id} archive partial fail: {archive_result['error']}"
+            )
+    except Exception as e:
+        logger.warning(f"GDrive archive skipped for #{staging_id}: {e}")
+
+    return ""
+
+
 # === 確認/修改/捨棄 ===
 
 async def _confirm_staging(staging_id: int, group_id: str) -> str:
-    """確認採購記錄"""
+    """確認採購記錄 + GDrive 正式歸檔（重命名 + INDEX.csv）"""
     staging = sm.get_staging(staging_id)
     if not staging:
         return f"找不到記錄 #{staging_id}"
@@ -138,26 +193,8 @@ async def _confirm_staging(staging_id: int, group_id: str) -> str:
         if item.get("ingredient_id"):
             sm.update_ingredient_price(item["ingredient_id"], item["unit_price"])
 
-    # 複製收據到 GDrive 採購單據/
-    gdrive_note = ""
-    if staging.get("local_image_path"):
-        try:
-            from services.gdrive_service import upload_file, _year_month_path, GDRIVE_LOCAL
-            import os
-            ym = staging.get("year_month", "")
-            if ym:
-                _, month_path = _year_month_path(ym)
-                dest_dir = os.path.join(month_path, "採購單據")
-                os.makedirs(dest_dir, exist_ok=True)
-                supplier = staging.get("supplier_name", "unknown")[:20]
-                basename = os.path.basename(staging["local_image_path"])
-                dest = os.path.join(dest_dir, f"{supplier}_{basename}")
-                import shutil
-                shutil.copy2(staging["local_image_path"], dest)
-                rel = os.path.relpath(dest, GDRIVE_LOCAL)
-                gdrive_note = f"\n☁️ 已歸檔：{rel}"
-        except Exception as e:
-            logging.getLogger("shanbot.command").warning(f"GDrive copy skipped: {e}")
+    # GDrive 正式歸檔
+    gdrive_note = await _do_archive(staging_id, staging)
 
     return (
         f"✅ 記錄 #{staging_id} 已確認\n"
@@ -225,6 +262,46 @@ async def _handle_confirm_response(text: str, group_id: str, state_data: dict) -
         return "請回覆「確認」或「捨棄」"
 
 
+_OCR_CONFIRM_WORDS = {"ok", "好", "對", "確認", "沒問題", "正確", "是", "yes", "可以", "👍"}
+_OCR_REJECT_WORDS = {"不對", "錯了", "修改", "不正確", "重來"}
+
+
+async def _handle_ocr_confirm_response(text: str, group_id: str, state_data: dict) -> str:
+    """處理 OCR 確認狀態的簡易回覆"""
+    staging_id = state_data.get("staging_id")
+    if not staging_id:
+        sm.clear_state(group_id)
+        return "狀態異常，請重新操作"
+
+    staging = sm.get_staging(staging_id)
+    if not staging or staging["status"] != "pending":
+        sm.clear_state(group_id)
+        return f"記錄 #{staging_id} 已處理"
+
+    normalized = text.strip().lower()
+
+    # 確認（含原有 "確認 #123" 格式）
+    if normalized in _OCR_CONFIRM_WORDS or re.match(r"確認\s*#?\d+", normalized):
+        sm.clear_state(group_id)
+        return await _confirm_staging(staging_id, group_id)
+
+    # 修改
+    if normalized in _OCR_REJECT_WORDS or re.match(r"修改\s*#?\d+", normalized):
+        sm.clear_state(group_id)
+        return _start_edit(staging_id, group_id)
+
+    # 捨棄
+    if normalized in ("捨棄", "丟掉", "不要") or re.match(r"捨棄\s*#?\d+", normalized):
+        sm.clear_state(group_id)
+        return _discard_staging(staging_id)
+
+    # 不認識 → 提示（不清除狀態）
+    return (f"📋 記錄 #{staging_id} 等待確認中\n"
+            "回覆「OK」或「好」確認\n"
+            "回覆「修改」進入修改模式\n"
+            "回覆「捨棄」丟棄此筆")
+
+
 async def _handle_supplier_response(text: str, group_id: str, state_data: dict) -> str:
     """處理供應商名稱確認"""
     staging_id = state_data.get("staging_id")
@@ -259,10 +336,15 @@ async def _handle_handler_response(text: str, group_id: str, state_data: dict) -
     sm.clear_state(group_id)
 
     staging = sm.get_staging(staging_id)
+
+    # GDrive 正式歸檔
+    gdrive_note = await _do_archive(staging_id, staging)
+
     return (
         f"✅ 記錄 #{staging_id} 已確認\n"
         f"經手人：{handler_name}\n"
         f"金額：${staging['total_amount']:,.0f}"
+        f"{gdrive_note}"
     )
 
 

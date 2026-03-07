@@ -77,6 +77,8 @@ class LineService:
                 },
                 timeout=10,
             )
+            if resp.status_code != 200:
+                logger.error(f"Push flex failed: {resp.status_code} {resp.text}")
             return resp.status_code == 200
         except Exception as e:
             logger.error(f"Push flex error: {e}")
@@ -85,6 +87,8 @@ class LineService:
     def reply_flex(self, reply_token: str, alt_text: str, flex_content: dict) -> bool:
         """回覆 Flex Message"""
         if not self.token or not reply_token:
+            logger.warning(f"Reply flex skipped: token={'set' if self.token else 'missing'}, "
+                           f"reply_token={'set' if reply_token else 'missing'}")
             return False
         try:
             resp = requests.post(
@@ -100,6 +104,8 @@ class LineService:
                 },
                 timeout=10,
             )
+            if resp.status_code != 200:
+                logger.error(f"Reply flex failed: {resp.status_code} {resp.text}")
             return resp.status_code == 200
         except Exception as e:
             logger.error(f"Reply flex error: {e}")

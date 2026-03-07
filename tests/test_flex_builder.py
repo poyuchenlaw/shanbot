@@ -61,12 +61,11 @@ class TestCameraMenu(unittest.TestCase):
 
     def test_card3_has_camera_buttons(self):
         card = self.result["contents"][2]
-        all_texts = _collect_texts(card)
-        # Find camera and cameraRoll actions
+        # Find camera and cameraRoll URI actions
         actions = _collect_actions(card)
-        action_types = [a.get("type") for a in actions]
-        self.assertIn("camera", action_types)
-        self.assertIn("cameraRoll", action_types)
+        uris = [a.get("uri", "") for a in actions if a.get("type") == "uri"]
+        self.assertTrue(any("camera" in u for u in uris))
+        self.assertTrue(any("cameraRoll" in u for u in uris))
 
     def test_tips_card_has_five_tips(self):
         card = self.result["contents"][0]

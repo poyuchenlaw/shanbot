@@ -1,8 +1,32 @@
 __pycache__/
 *.pyc
+*.pyo
+
+# Data (runtime)
 data/
 logs/
 *.db
 *.db-wal
 *.db-shm
+
+# Credentials
+config/.env
 .env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Python
+venv/
+.venv/
+*.egg-info/
+
+# Test
+.pytest_cache/
+htmlcov/
+.coverage

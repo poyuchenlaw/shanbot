@@ -97,6 +97,7 @@ async def lifespan(app: FastAPI):
     monthly.start()
 
     logger.info(f"小膳 Bot started on port {PORT}")
+    logger.info(f"LINE Webhook URL: https://shanbot.kuangshin.tw/webhook")
     logger.info(f"Admin: {'set' if ADMIN_LINE_USER_ID else 'not set'}")
     logger.info(f"Groups: {len(ALLOWED_GROUPS)}")
 
@@ -108,7 +109,7 @@ async def lifespan(app: FastAPI):
     logger.info("小膳 Bot stopped")
 
 
-app = FastAPI(title="ShanBot", version="2.3.0", lifespan=lifespan)
+app = FastAPI(title="ShanBot", version="2.4.0", lifespan=lifespan)
 
 # 靜態檔案路由 — 生成的菜色圖片
 IMAGES_DIR = os.path.join(os.path.dirname(__file__), "data", "images")
@@ -131,6 +132,9 @@ async def webhook(request: Request):
         return JSONResponse({"error": "Invalid JSON"}, status_code=400)
 
     events = payload.get("events", [])
+    if events:
+        logger.info(f"Webhook received {len(events)} event(s): "
+                     f"{[e.get('type','?') for e in events]}")
     for event in events:
         asyncio.create_task(_process_event(event))
 
@@ -180,6 +184,9 @@ async def _process_event(event: dict):
                 msg_id = msg.get("id", "")
                 filename = msg.get("fileName", "unknown")
                 await _handle_file(msg_id, filename, group_id, user_id, reply_token)
+
+            elif msg_type == "sticker":
+                await _handle_sticker(group_id, user_id, reply_token)
 
         elif event_type == "postback":
             postback_data = event.get("postback", {}).get("data", "")
@@ -263,6 +270,19 @@ async def _handle_file(message_id: str, filename: str, group_id: str,
         line_service.reply(reply_token, reply)
 
 
+async def _handle_sticker(group_id: str, user_id: str, reply_token: str):
+    """貼圖訊息 — 僅在等待 OCR 確認時視為確認"""
+    state, state_data = sm.get_state(group_id)
+    if state == "waiting_ocr_confirm":
+        staging_id = state_data.get("staging_id")
+        if staging_id:
+            from handlers.command_handler import _confirm_staging
+            sm.clear_state(group_id)
+            reply = await _confirm_staging(staging_id, group_id)
+            if reply and line_service:
+                line_service.reply(reply_token, reply)
+
+
 # === 管理端點 ===
 
 @app.get("/health")
@@ -273,7 +293,7 @@ async def health():
     return {
         "status": "ok",
         "bot": "shanbot",
-        "version": "2.2.0",
+        "version": "2.4.0",
         "port": PORT,
         "admin_set": bool(ADMIN_LINE_USER_ID),
         "groups": len(ALLOWED_GROUPS),

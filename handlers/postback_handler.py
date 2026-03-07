@@ -419,10 +419,15 @@ async def _handle_quick_confirm(line_service, params: dict, group_id: str, reply
         if item.get("ingredient_id"):
             sm.update_ingredient_price(item["ingredient_id"], item["unit_price"])
 
+    # GDrive 正式歸檔（共用 command_handler 的輔助函數）
+    from handlers.command_handler import _do_archive
+    gdrive_note = await _do_archive(staging_id, staging)
+
     line_service.reply(reply_token,
                        f"✅ #{staging_id} 已確認\n"
                        f"供應商：{staging['supplier_name']}\n"
-                       f"金額：${staging['total_amount']:,.0f}")
+                       f"金額：${staging['total_amount']:,.0f}"
+                       f"{gdrive_note}")
 
 
 def _handle_quick_edit(line_service, params: dict, group_id: str, reply_token: str):

@@ -148,19 +148,26 @@ async def handle_photo_received(
             except Exception as e:
                 logger.warning(f"GDrive re-upload skipped: {e}")
 
+    # 7.5 設定等待確認狀態
+    sm.set_state(group_id, "waiting_ocr_confirm", {
+        "staging_id": staging_id,
+    })
+
     # 8. 根據信心度回覆
     if ocr_result.result_level == "AUTO_PASS":
         # 高信心度 → 自動入暫存，推送 Flex 確認
         try:
             flex = build_review_flex(ocr_result, staging_id)
-            line_service.reply_flex(
+            success = line_service.reply_flex(
                 reply_token,
                 f"📋 採購辨識（信心度 {int(ocr_result.confidence*100)}%）",
                 flex,
             )
-            return None  # 已用 Flex 回覆
-        except Exception:
-            pass  # fallback 到文字回覆
+            if success:
+                return None  # 已用 Flex 回覆
+            logger.warning(f"Flex reply failed for #{staging_id}, falling back to text")
+        except Exception as e:
+            logger.warning(f"Flex build error for #{staging_id}: {e}")
 
         return _build_text_summary(ocr_result, staging_id, "🟢 高信心度，建議確認")
 
@@ -168,14 +175,16 @@ async def handle_photo_received(
         # 中信心度 → 需人工確認
         try:
             flex = build_review_flex(ocr_result, staging_id)
-            line_service.reply_flex(
+            success = line_service.reply_flex(
                 reply_token,
                 f"⚠️ 採購辨識需確認（信心度 {int(ocr_result.confidence*100)}%）",
                 flex,
             )
-            return None
-        except Exception:
-            pass
+            if success:
+                return None
+            logger.warning(f"Flex reply failed for #{staging_id}, falling back to text")
+        except Exception as e:
+            logger.warning(f"Flex build error for #{staging_id}: {e}")
 
         issues_text = "\n".join(f"  ⚠️ {i}" for i in ocr_result.issues) if ocr_result.issues else ""
         return _build_text_summary(ocr_result, staging_id, "🟡 需要確認") + \
@@ -211,14 +220,24 @@ def _build_text_summary(result, staging_id: int, status_label: str) -> str:
     if len(result.items) > 10:
         lines.append(f"  ... 共 {len(result.items)} 項")
 
+    uncertain = [item for item in result.items
+                 if item.is_handwritten or item.confidence < 0.6]
+    if uncertain:
+        lines.append("")
+        lines.append("⚠️ 以下品項請特別確認：")
+        for item in uncertain[:5]:
+            tag = "✍️手寫" if item.is_handwritten else "❓模糊"
+            lines.append(f"  {tag}：{item.name} {item.quantity}{item.unit} "
+                         f"@${item.unit_price:,.0f} = ${item.amount:,.0f}")
+
     lines.extend([
         "",
         f"合計：${result.total_amount:,.0f}",
         f"（未稅 ${result.subtotal:,.0f} + 稅 ${result.tax_amount:,.0f}）",
         "",
-        f"✅ 輸入「確認 #{staging_id}」確認",
-        f"✏️ 輸入「修改 #{staging_id}」修改",
-        f"❌ 輸入「捨棄 #{staging_id}」捨棄",
+        "👉 回覆「OK」或「好」快速確認",
+        "✏️ 回覆「修改」進入修改模式",
+        "❌ 回覆「捨棄」丟棄此筆",
     ])
 
     return "\n".join(lines)
