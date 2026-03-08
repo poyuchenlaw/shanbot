@@ -25,6 +25,8 @@ from task_manager import (
     HeartbeatScheduler,
     MarketSyncScheduler,
     MonthlySummaryScheduler,
+    WebhookGuardScheduler,
+    ExternalAPIGuardScheduler,
 )
 
 # Logging
@@ -96,6 +98,12 @@ async def lifespan(app: FastAPI):
     monthly = MonthlySummaryScheduler(line_service, primary_group)
     monthly.start()
 
+    webhook_guard = WebhookGuardScheduler()
+    webhook_guard.start()
+
+    api_guard = ExternalAPIGuardScheduler()
+    api_guard.start()
+
     logger.info(f"小膳 Bot started on port {PORT}")
     logger.info(f"LINE Webhook URL: https://shanbot.kuangshin.tw/webhook")
     logger.info(f"Admin: {'set' if ADMIN_LINE_USER_ID else 'not set'}")
@@ -106,6 +114,8 @@ async def lifespan(app: FastAPI):
     heartbeat.stop()
     market_sync.stop()
     monthly.stop()
+    webhook_guard.stop()
+    api_guard.stop()
     logger.info("小膳 Bot stopped")
 
 
@@ -290,18 +300,19 @@ async def _handle_sticker(group_id: str, user_id: str, reply_token: str):
 
 @app.get("/health")
 async def health():
-    """健康檢查"""
+    """健康檢查（含 webhook + 外部 API 狀態）"""
     counts = sm.get_table_counts()
     stats = sm.get_staging_stats()
     return {
         "status": "ok",
         "bot": "shanbot",
-        "version": "2.4.0",
+        "version": "2.5.0",
         "port": PORT,
         "admin_set": bool(ADMIN_LINE_USER_ID),
         "groups": len(ALLOWED_GROUPS),
         "tables": counts,
         "staging": stats,
+        "external_apis": api_guard.last_status if api_guard else {},
         "timestamp": datetime.now().isoformat(),
     }
 

@@ -1,10 +1,15 @@
-"""排程管理器 — 心跳報告、行情同步、月底提醒"""
+"""排程管理器 — 心跳報告、行情同步、月底提醒、webhook 自檢"""
 
 import asyncio
 import logging
+import os
 from datetime import datetime, timedelta
 
+import requests
+
 logger = logging.getLogger("shanbot.scheduler")
+
+EXPECTED_WEBHOOK_URL = "https://shanbot.kuangshin.tw/webhook"
 
 
 class BaseScheduler:
@@ -167,3 +172,191 @@ class MonthlySummaryScheduler(BaseScheduler):
             logger.info(f"Monthly summary sent for {ym}")
         except Exception as e:
             logger.error(f"Monthly summary error: {e}", exc_info=True)
+
+
+class WebhookGuardScheduler(BaseScheduler):
+    """每 6 小時驗證 LINE webhook URL 是否正確，異常則自動修復。
+
+    防止 webhook URL 被變更（如 ngrok 測試後忘記恢復）導致 Bot 完全斷線。
+    """
+
+    CHECK_INTERVAL_HOURS = 6
+
+    def __init__(self):
+        super().__init__("webhook-guard-6h")
+        self._token = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN", "")
+
+    async def _loop(self):
+        # 啟動後立即檢查一次
+        if self._running:
+            await self._execute()
+        while self._running:
+            await asyncio.sleep(self.CHECK_INTERVAL_HOURS * 3600)
+            if self._running:
+                await self._execute()
+
+    async def _execute(self):
+        if not self._token:
+            logger.warning("WebhookGuard: LINE_CHANNEL_ACCESS_TOKEN not set, skipping")
+            return
+        try:
+            await asyncio.to_thread(self._check_and_fix)
+        except Exception as e:
+            logger.error(f"WebhookGuard error: {e}", exc_info=True)
+
+    def _check_and_fix(self):
+        headers = {"Authorization": f"Bearer {self._token}"}
+
+        # 1. 查詢目前 webhook URL
+        try:
+            resp = requests.get(
+                "https://api.line.me/v2/bot/channel/webhook/endpoint",
+                headers=headers, timeout=10,
+            )
+            if resp.status_code != 200:
+                logger.error(f"WebhookGuard: GET endpoint failed {resp.status_code}")
+                return
+            info = resp.json()
+        except Exception as e:
+            logger.error(f"WebhookGuard: GET endpoint error: {e}")
+            return
+
+        current_url = info.get("endpoint", "")
+        is_active = info.get("active", False)
+
+        # 2. 判斷是否需要修復
+        needs_fix = False
+        if current_url != EXPECTED_WEBHOOK_URL:
+            logger.warning(
+                f"WebhookGuard: URL MISMATCH — "
+                f"expected={EXPECTED_WEBHOOK_URL} actual={current_url}"
+            )
+            needs_fix = True
+        if not is_active:
+            logger.warning("WebhookGuard: webhook is INACTIVE")
+            needs_fix = True
+
+        if not needs_fix:
+            logger.info(f"WebhookGuard: OK — {current_url} (active={is_active})")
+            return
+
+        # 3. 自動修復
+        try:
+            resp = requests.put(
+                "https://api.line.me/v2/bot/channel/webhook/endpoint",
+                headers={**headers, "Content-Type": "application/json"},
+                json={"endpoint": EXPECTED_WEBHOOK_URL},
+                timeout=10,
+            )
+            if resp.status_code == 200:
+                logger.warning(
+                    f"WebhookGuard: AUTO-FIXED webhook URL → {EXPECTED_WEBHOOK_URL}"
+                )
+            else:
+                logger.error(f"WebhookGuard: fix failed {resp.status_code} {resp.text}")
+        except Exception as e:
+            logger.error(f"WebhookGuard: fix error: {e}")
+
+        # 4. 驗證修復結果
+        try:
+            resp = requests.post(
+                "https://api.line.me/v2/bot/channel/webhook/test",
+                headers={**headers, "Content-Type": "application/json"},
+                json={"endpoint": EXPECTED_WEBHOOK_URL},
+                timeout=15,
+            )
+            test = resp.json()
+            if test.get("success"):
+                logger.info(f"WebhookGuard: verify OK — status={test.get('statusCode')}")
+            else:
+                logger.error(f"WebhookGuard: verify FAILED — {test}")
+        except Exception as e:
+            logger.error(f"WebhookGuard: verify error: {e}")
+
+
+class ExternalAPIGuardScheduler(BaseScheduler):
+    """每 12 小時檢查外部 API 可用性（農業部 + LINE API）。
+
+    不修復（外部 API 不可控），但記錄狀態供 /health 查詢。
+    """
+
+    CHECK_INTERVAL_HOURS = 12
+
+    def __init__(self):
+        super().__init__("api-guard-12h")
+        self.last_status: dict = {}
+
+    async def _loop(self):
+        # 啟動後延遲 60 秒再首次檢查（避免啟動風暴）
+        await asyncio.sleep(60)
+        if self._running:
+            await self._execute()
+        while self._running:
+            await asyncio.sleep(self.CHECK_INTERVAL_HOURS * 3600)
+            if self._running:
+                await self._execute()
+
+    async def _execute(self):
+        try:
+            status = await asyncio.to_thread(self._check_apis)
+            self.last_status = status
+            ok = sum(1 for v in status.values() if v == "ok")
+            total = len(status)
+            if ok == total:
+                logger.info(f"APIGuard: all {total} APIs healthy")
+            else:
+                failed = {k: v for k, v in status.items() if v != "ok"}
+                logger.warning(f"APIGuard: {total - ok}/{total} APIs unhealthy: {failed}")
+        except Exception as e:
+            logger.error(f"APIGuard error: {e}", exc_info=True)
+
+    def _check_apis(self) -> dict:
+        from datetime import date as _date
+        results = {}
+
+        # 農業部 FarmTransData
+        try:
+            resp = requests.get(
+                "https://data.moa.gov.tw/Service/OpenData/FromM/FarmTransData.aspx",
+                params={"$top": "1"}, timeout=10,
+            )
+            results["moa_farm"] = "ok" if resp.status_code == 200 else f"http_{resp.status_code}"
+        except Exception as e:
+            results["moa_farm"] = f"error: {str(e)[:50]}"
+
+        # 農業部 PoultryTransType
+        try:
+            resp = requests.get(
+                "https://data.moa.gov.tw/api/v1/PoultryTransType_BoiledChicken_Eggs/",
+                params={"$top": "1"}, timeout=10,
+            )
+            results["moa_poultry"] = "ok" if resp.status_code == 200 else f"http_{resp.status_code}"
+        except Exception as e:
+            results["moa_poultry"] = f"error: {str(e)[:50]}"
+
+        # 農業部 PorkTransType
+        try:
+            resp = requests.get(
+                "https://data.moa.gov.tw/api/v1/PorkTransType/",
+                params={"$top": "1"}, timeout=10,
+            )
+            results["moa_pork"] = "ok" if resp.status_code == 200 else f"http_{resp.status_code}"
+        except Exception as e:
+            results["moa_pork"] = f"error: {str(e)[:50]}"
+
+        # LINE Messaging API
+        token = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN", "")
+        if token:
+            try:
+                resp = requests.get(
+                    "https://api.line.me/v2/bot/info",
+                    headers={"Authorization": f"Bearer {token}"},
+                    timeout=10,
+                )
+                results["line_api"] = "ok" if resp.status_code == 200 else f"http_{resp.status_code}"
+            except Exception as e:
+                results["line_api"] = f"error: {str(e)[:50]}"
+        else:
+            results["line_api"] = "no_token"
+
+        return results
