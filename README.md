@@ -131,7 +131,7 @@ Bot 會在 `http://localhost:8025` 啟動。
 2. 複製 config/.env.example 為 config/.env，提示我填入：
    - LINE_CHANNEL_SECRET 和 LINE_CHANNEL_ACCESS_TOKEN（從 LINE Developers Console 取得）
    - GEMINI_API_KEY（從 Google AI Studio https://aistudio.google.com/apikey 免費取得）
-   - ADMIN_USER_ID（你的 LINE User ID）
+   （ADMIN_USER_ID 無需手動設定，第一位與 Bot 互動的使用者會自動成為管理員）
 3. 初始化 SQLite 資料庫
 4. 用 PM2 啟動服務：pm2 start ecosystem.config.js && pm2 save
 5. 設定 Cloudflare Tunnel 或 ngrok 將 HTTPS 流量轉發到 localhost:8025
