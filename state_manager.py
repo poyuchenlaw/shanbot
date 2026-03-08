@@ -950,6 +950,20 @@ def get_financial_documents(
     return [dict(r) for r in rows]
 
 
+def search_financial_documents(keyword: str) -> list[dict]:
+    """以關鍵字搜尋財務文件（搜尋 filename, doc_category, description）"""
+    conn = _get_conn()
+    pattern = f"%{keyword}%"
+    rows = conn.execute(
+        "SELECT * FROM financial_documents "
+        "WHERE filename LIKE ? OR doc_category LIKE ? OR description LIKE ? "
+        "ORDER BY created_at DESC LIMIT 20",
+        (pattern, pattern, pattern),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
 def update_financial_document(doc_id: int, **kwargs):
     """更新財務文件欄位"""
     conn = _get_conn()

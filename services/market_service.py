@@ -669,6 +669,111 @@ def get_cached_price(item_name: str, days: int = None) -> Optional[dict]:
     return None
 
 
+async def get_today_summary() -> str:
+    """取得今日行情摘要，回傳格式化文字供 LINE 顯示
+
+    Returns:
+        格式化的行情文字摘要，或 None（無資料時）
+    """
+    import asyncio
+
+    summary = await asyncio.to_thread(get_market_summary)
+    if not summary or not summary.get("categories"):
+        return None
+
+    lines = [f"📊 今日農產品行情（{summary['roc_date']}）", ""]
+
+    for cat_name, cat_data in summary["categories"].items():
+        count = cat_data.get("count", 0)
+        source = cat_data.get("source", "")
+        if count == 0:
+            lines.append(f"【{cat_name}】休市或無資料")
+            continue
+
+        lines.append(f"【{cat_name}】{count} 筆")
+        sample = cat_data.get("sample", [])
+        for item in sample:
+            name = item.get("name", "")
+            avg_price = item.get("avg_price", 0)
+            if name and avg_price > 0:
+                lines.append(f"  {name}：${avg_price:.1f}/kg")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+async def get_item_price_info(item_name: str) -> str:
+    """查詢特定食材的市場行情，回傳格式化文字
+
+    Args:
+        item_name: 食材名稱
+
+    Returns:
+        格式化的價格資訊文字，或 None（無資料時）
+    """
+    # 先嘗試從快取取得
+    cached = get_cached_price(item_name)
+    if cached:
+        lines = [
+            f"📈 「{item_name}」行情",
+            f"  市場：{cached.get('market_name', '未知')}",
+            f"  均價：${cached.get('avg_price', 0):.1f}/kg",
+        ]
+        if cached.get("high_price"):
+            lines.append(f"  上價：${cached['high_price']:.1f}")
+        if cached.get("low_price"):
+            lines.append(f"  下價：${cached['low_price']:.1f}")
+        if cached.get("price_date"):
+            lines.append(f"  日期：{cached['price_date']}")
+
+        # 附加歷史比對資訊
+        ingredient = sm.find_ingredient(item_name)
+        if ingredient:
+            history = sm.get_price_history(ingredient["id"], days=30)
+            prices = [h["avg_price"] for h in history
+                      if h.get("avg_price") and h["avg_price"] > 0]
+            if len(prices) >= 2:
+                avg_30d = statistics.mean(prices)
+                lines.append(f"  30日均價：${avg_30d:.1f}")
+                if prices[0] > 0:
+                    trend = ((prices[0] - avg_30d) / avg_30d) * 100
+                    trend_icon = "📈" if trend > 0 else "📉" if trend < 0 else "➡️"
+                    lines.append(f"  趨勢：{trend_icon} {trend:+.1f}%")
+
+        return "\n".join(lines)
+
+    # 快取無資料，嘗試即時查詢蔬果 API
+    import asyncio
+    veg_data = await asyncio.to_thread(fetch_vegetables)
+    fruit_data = await asyncio.to_thread(fetch_fruits)
+    all_data = veg_data + fruit_data
+
+    matches = [
+        item for item in all_data
+        if item_name in item.get("作物名稱", "")
+    ]
+
+    if not matches:
+        return None
+
+    lines = [f"📈 「{item_name}」今日行情", ""]
+    seen = set()
+    for item in matches[:5]:
+        crop = item.get("作物名稱", "").strip()
+        market = item.get("市場名稱", "").strip()
+        key = f"{crop}-{market}"
+        if key in seen:
+            continue
+        seen.add(key)
+        avg_p = _safe_float(item.get("平均價"))
+        high_p = _safe_float(item.get("上價"))
+        low_p = _safe_float(item.get("下價"))
+        lines.append(f"  {crop}（{market}）")
+        lines.append(f"    均價 ${avg_p:.1f} ｜上 ${high_p:.1f} ｜下 ${low_p:.1f}")
+
+    return "\n".join(lines)
+
+
 def get_market_summary(target_date: date = None) -> dict:
     """取得指定日期的市場行情摘要
 

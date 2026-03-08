@@ -41,6 +41,9 @@ async def handle_text(line_service, text: str, group_id: str,
         from handlers.menu_handler import handle_cost_input
         return await handle_cost_input(line_service, text, group_id, state_data)
 
+    if state == "waiting_finance_search":
+        return _handle_finance_search(text, group_id)
+
     if state == "waiting_ocr_confirm":
         return await _handle_ocr_confirm_response(text, group_id, state_data)
 
@@ -300,6 +303,31 @@ async def _handle_ocr_confirm_response(text: str, group_id: str, state_data: dic
             "回覆「OK」或「好」確認\n"
             "回覆「修改」進入修改模式\n"
             "回覆「捨棄」丟棄此筆")
+
+
+def _handle_finance_search(text: str, group_id: str) -> str:
+    """處理財務文件搜尋（waiting_finance_search 狀態）"""
+    keyword = text.strip()
+    sm.clear_state(group_id)
+
+    if not keyword:
+        return "請輸入搜尋關鍵字"
+
+    docs = sm.search_financial_documents(keyword)
+    if not docs:
+        return f"🔍 找不到包含「{keyword}」的財務文件"
+
+    lines = [f"🔍 搜尋「{keyword}」找到 {len(docs)} 筆文件", ""]
+    for doc in docs[:10]:
+        status_icon = "✅" if doc.get("status") == "confirmed" else "⏳"
+        lines.append(
+            f"  {status_icon} #{doc['id']} | {doc.get('filename', '')} | "
+            f"{doc.get('doc_category', '')} | {doc.get('year_month', '')}"
+        )
+    if len(docs) > 10:
+        lines.append(f"  ... 還有 {len(docs) - 10} 筆")
+
+    return "\n".join(lines)
 
 
 async def _handle_supplier_response(text: str, group_id: str, state_data: dict) -> str:
