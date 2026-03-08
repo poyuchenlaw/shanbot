@@ -237,7 +237,10 @@ async def _handle_image(message_id: str, group_id: str, user_id: str, reply_toke
             line_service.reply(reply_token, reply)
         return
 
-    # 預設：收據/對帳單 OCR
+    # 從拍照按鈕進入（或直接傳圖）→ 收據/對帳單 OCR
+    if state == "waiting_receipt_photo":
+        sm.clear_state(group_id)  # 清除暫態，photo_handler 會設新狀態
+
     from handlers.photo_handler import handle_photo_received
     reply = await handle_photo_received(
         line_service, message_id, group_id, user_id, reply_token

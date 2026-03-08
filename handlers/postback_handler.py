@@ -60,6 +60,8 @@ async def handle_postback(line_service, data_str: str, group_id: str,
         _handle_file_set_category(line_service, params, reply_token)
     elif action == "tax_deduction_stats":
         await _handle_tax_deduction_stats(line_service, params, group_id, reply_token)
+    elif action == "start_camera":
+        _handle_start_camera(line_service, params, group_id, reply_token)
     elif action == "menu_photo_upload":
         _handle_menu_photo_upload(line_service, group_id, user_id, reply_token)
     elif action == "menu_photo_regenerate":
@@ -622,6 +624,54 @@ async def _handle_tax_deduction_stats(line_service, params: dict, group_id: str,
         return
     flex = fb.build_tax_deduction_summary_flex(stats)
     line_service.reply_flex(reply_token, f"🧾 {ym} 扣抵分析", flex)
+
+
+# === 拍照記帳 — 閃訊說明 + 開啟相機 ===
+
+def _handle_start_camera(line_service, params: dict, group_id: str, reply_token: str):
+    """按下拍照按鈕 → 發送操作說明 + 設定等待狀態"""
+    mode = params.get("mode", "camera")
+
+    # 設定等待收據照片狀態（讓 _handle_image 知道這是收據拍照流程）
+    sm.set_state(group_id, "waiting_receipt_photo", {"mode": mode})
+
+    if mode == "camera":
+        msg = (
+            "📷 收據拍照模式已啟動\n"
+            "━━━━━━━━━━━━━━\n"
+            "\n"
+            "請直接拍照或傳送收據照片給我！\n"
+            "\n"
+            "📌 拍照小訣竅：\n"
+            "• 光線充足，避免陰影\n"
+            "• 收據平放桌面，正面朝上\n"
+            "• 四個角都要拍進去\n"
+            "• 等對焦完成再按快門\n"
+            "\n"
+            "🤖 拍完後小膳會自動：\n"
+            "AI 辨識 → 顯示結果 → 等你確認 → 入帳\n"
+            "\n"
+            "💡 也可以一次傳多張，我會逐一辨識"
+        )
+    else:
+        msg = (
+            "🖼️ 相簿選取模式已啟動\n"
+            "━━━━━━━━━━━━━━\n"
+            "\n"
+            "請從相簿選取收據照片傳給我！\n"
+            "\n"
+            "📌 選取建議：\n"
+            "• 選擇畫面清晰的照片\n"
+            "• 收據內容完整、不被裁切\n"
+            "• 避免選到模糊或過暗的照片\n"
+            "\n"
+            "🤖 傳送後小膳會自動：\n"
+            "AI 辨識 → 顯示結果 → 等你確認 → 入帳\n"
+            "\n"
+            "💡 也可以一次傳多張，我會逐一辨識"
+        )
+
+    line_service.reply(reply_token, msg)
 
 
 # === 菜單照片上傳 ===

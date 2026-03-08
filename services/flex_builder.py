@@ -78,8 +78,9 @@ def _camera_button(label: str) -> dict:
     return {
         "type": "button", "style": "primary", "color": COLOR_PRIMARY,
         "height": "sm",
-        "action": {"type": "uri", "label": label,
-                   "uri": "https://line.me/R/nv/camera/"},
+        "action": {"type": "postback", "label": label,
+                   "data": "action=start_camera&mode=camera",
+                   "displayText": "📷 開啟相機拍收據"},
     }
 
 
@@ -87,8 +88,9 @@ def _camera_roll_button(label: str) -> dict:
     return {
         "type": "button", "style": "primary", "color": COLOR_SECONDARY,
         "height": "sm",
-        "action": {"type": "uri", "label": label,
-                   "uri": "https://line.me/R/nv/cameraRoll/single"},
+        "action": {"type": "postback", "label": label,
+                   "data": "action=start_camera&mode=album",
+                   "displayText": "🖼️ 從相簿選收據照片"},
     }
 
 
