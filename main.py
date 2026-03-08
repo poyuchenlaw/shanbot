@@ -48,6 +48,7 @@ CHANNEL_SECRET = os.environ.get("LINE_CHANNEL_SECRET", "")
 PORT = int(os.environ.get("PORT", 8025))
 
 line_service: LineService | None = None
+api_guard: ExternalAPIGuardScheduler | None = None
 ADMIN_LINE_USER_ID = ""
 ALLOWED_GROUPS: set[str] = set()
 
@@ -64,7 +65,7 @@ def verify_signature(body: bytes, signature: str) -> bool:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """啟動/關閉生命週期"""
-    global line_service, ADMIN_LINE_USER_ID, ALLOWED_GROUPS
+    global line_service, api_guard, ADMIN_LINE_USER_ID, ALLOWED_GROUPS
 
     # 初始化 DB
     sm.init_db()
