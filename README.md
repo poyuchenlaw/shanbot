@@ -1,4 +1,4 @@
-# Shanbot (小膳) — 餐飲業 AI 內帳助手
+# 小膳 Shanbot — AI 團膳內帳管理系統
 
 > 拍發票、算菜成本、出月結報表、報稅匯出 — 全部在 LINE 上完成。
 
@@ -8,71 +8,49 @@ Shanbot 是一個開源的 LINE Bot，專為團膳公司與小型餐飲業者設
 
 | 功能 | 說明 |
 |------|------|
-| **發票/收據 OCR** | 拍照即辨識 — 三引擎自動切換（PaddleOCR → Gemini VLM → HunyuanOCR） |
-| **菜單管理** | AI 菜單建議 + 食材成本自動計算 |
-| **財務報表** | 月結 / 年結報表一鍵生成（符合中小企業會計準則） |
-| **稅務匯出** | 報稅季資料自動整理匯出，省下數十小時人工 |
-| **市場行情** | 食材價格自動同步，即時掌握成本波動 |
+| **拍照記帳（OCR）** | 拍照即辨識收據/發票 — 三引擎自動切換（PaddleOCR PP-OCRv5 → Gemini VLM → HunyuanOCR） |
+| **財務報表** | 月結 / 年結 / 資產負債表 / 損益表，一鍵生成（符合中小企業會計準則） |
+| **採購管理** | 供應商資料管理、食材行情自動同步、比價分析 |
+| **菜單企劃** | AI 菜單建議 + 成本估算 + 行銷海報圖片生成 |
+| **稅務匯出** | MOF 格式 / 會計軟體格式，報稅季資料自動整理，扣抵自動分類 |
 | **GDrive 歸檔** | 發票照片自動重命名、分類歸檔到 Google Drive |
-| **LINE 六宮格選單** | 直覺操作介面，不需要學任何指令 |
+| **LINE 六宮格選單** | 拍照記帳 / 財務資料 / 採購管理 / 菜單企劃 / 報表生成 / 使用說明 |
 
-## 快速開始
+## 系統架構
 
-### 前置需求
+```
+LINE Messaging API
+       │
+       ▼
+  FastAPI (port 8025)  ←── PM2 process manager
+       │
+       ├── handlers/          → 指令路由 + 拍照 + 菜單對話 + Postback
+       ├── services/          → OCR + 財報 + 稅務 + 行情 + AI + GDrive
+       ├── state_manager.py   → SQLite 資料管理
+       └── task_manager.py    → 排程器 (心跳 + 市場同步 + 月結)
 
-- Python 3.10+
-- LINE Messaging API Channel（[申請教學](https://developers.line.biz/en/docs/messaging-api/getting-started/)）
-- Google Gemini API Key（OCR 備援 + AI 功能）
+LLM 三層降級：
+  Claude Code CLI → llm-router (Gemini/Groq fallback) → Gemini Direct API
 
-### 安裝
+OCR 三引擎：
+  PaddleOCR PP-OCRv5（本地，最快）
+       ↓ 失敗
+  Gemini VLM（雲端，最準）
+       ↓ 失敗
+  HunyuanOCR via HF Inference（備援）
 
-```bash
-git clone https://github.com/poyuchenlaw/shanbot.git
-cd shanbot
-pip install -r requirements.txt
+部署：
+  PM2 + Cloudflare Tunnel (HTTPS) → LINE Webhook
 ```
 
-### 設定
-
-複製環境變數範本並填入你的金鑰：
-
-```bash
-cp config/.env.example config/.env
-```
-
-必填欄位：
-
-```env
-# LINE Bot
-LINE_CHANNEL_SECRET=your_channel_secret
-LINE_CHANNEL_ACCESS_TOKEN=your_access_token
-
-# AI (OCR + 智慧功能)
-GEMINI_API_KEY=your_gemini_key
-
-# Google Drive (選填，用於自動歸檔)
-GDRIVE_FOLDER_ID=your_folder_id
-```
-
-### 啟動
-
-```bash
-# 直接啟動
-python main.py
-
-# 或用 PM2 管理（推薦）
-pm2 start ecosystem.config.js
-```
-
-Bot 會在 `http://localhost:8025` 啟動，將此 URL 設定為 LINE Webhook 即可使用。
-
-## 架構
+## 專案結構
 
 ```
 shanbot/
 ├── main.py                → FastAPI webhook 入口 (port 8025)
 ├── state_manager.py       → SQLite 資料管理
 ├── task_manager.py        → 排程器 (心跳 + 市場同步 + 月結)
+├── ecosystem.config.js    → PM2 設定檔
 ├── handlers/
 │   ├── command_handler.py → 指令路由
 │   ├── photo_handler.py   → 發票/收據拍照 OCR
@@ -82,37 +60,110 @@ shanbot/
 ├── services/
 │   ├── ocr_service.py     → 三引擎 OCR (PaddleOCR + Gemini + Hunyuan)
 │   ├── financial_report_service.py → 四大財務報表
-│   ├── tax_export_service.py → 稅務匯出
+│   ├── tax_export_service.py → 稅務匯出 (MOF + 會計軟體)
 │   ├── market_service.py  → 食材行情同步
 │   ├── menu_ai_service.py → AI 菜單建議
 │   ├── gdrive_service.py  → Google Drive 歸檔
 │   ├── flex_builder.py    → LINE Flex Message 模板
 │   └── richmenu_service.py → LINE Rich Menu 管理
+├── config/
+│   ├── .env               → 環境變數（不入版控）
+│   └── .env.example       → 環境變數範本
 └── tests/                 → 測試
 ```
 
-## 技術特色
+## 自行部署指南
 
-### 三引擎 OCR 自動降級
+### 前置條件
+
+1. **Linux / WSL2 環境**（PaddleOCR 需要 Linux）
+2. **Python 3.10+**
+3. **Node.js 18+**（用於 PM2 進程管理）
+4. **Claude Code CLI**（`npm install -g @anthropic-ai/claude-code`，需 Anthropic API Key 或 Claude Pro/Max 訂閱）
+5. **LINE Messaging API 帳號**（至 [LINE Developers Console](https://developers.line.biz/console/) 建立 Channel）
+6. **Cloudflare Tunnel**（或其他 HTTPS 反向代理，如 ngrok）
+
+### 安裝
+
+```bash
+git clone https://github.com/poyuchenlaw/shanbot.git
+cd shanbot
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+### 設定環境變數
+
+```bash
+cp config/.env.example config/.env
+```
+
+用文字編輯器打開 `config/.env`，填入你的金鑰（詳見下方[環境變數說明](#環境變數說明)）。
+
+### 啟動
+
+```bash
+# 直接啟動
+python main.py
+
+# 或用 PM2 管理（推薦，自動重啟 + 日誌管理）
+npm install -g pm2
+pm2 start ecosystem.config.js
+pm2 save
+```
+
+Bot 會在 `http://localhost:8025` 啟動。
+
+### 設定 Webhook
+
+1. 用 Cloudflare Tunnel 或 ngrok 將 HTTPS 流量轉發到 `localhost:8025`
+2. 在 [LINE Developers Console](https://developers.line.biz/console/) 設定 Webhook URL 為你的公開 HTTPS URL + `/webhook`
+3. 驗證健康狀態：`curl http://localhost:8025/health` 應回傳 200
+
+### 一鍵部署提示詞
+
+安裝好 [Claude Code](https://docs.anthropic.com/en/docs/claude-code) 後，在專案目錄執行 `claude` 並貼上以下提示詞，即可自動完成部署：
 
 ```
-拍照 → PaddleOCR PP-OCRv5（本地，最快）
-       ↓ 失敗
-       Gemini VLM（雲端，最準）
-       ↓ 失敗
-       HunyuanOCR via HF Inference（備援）
+請幫我部署小膳 Shanbot 內帳系統：
+1. 建立 Python venv 並安裝 requirements.txt
+2. 複製 config/.env.example 為 config/.env，提示我填入：
+   - LINE_CHANNEL_SECRET 和 LINE_CHANNEL_ACCESS_TOKEN（從 LINE Developers Console 取得）
+   - GEMINI_API_KEY（從 Google AI Studio https://aistudio.google.com/apikey 免費取得）
+   - ADMIN_USER_ID（你的 LINE User ID）
+3. 初始化 SQLite 資料庫
+4. 用 PM2 啟動服務：pm2 start ecosystem.config.js && pm2 save
+5. 設定 Cloudflare Tunnel 或 ngrok 將 HTTPS 流量轉發到 localhost:8025
+6. 在 LINE Developers Console 設定 Webhook URL 為你的公開 HTTPS URL + /webhook
+7. 建立 Rich Menu（6 格：拍照記帳/財務資料/採購管理/菜單企劃/報表生成/使用說明）
+8. 驗證：curl http://localhost:8025/health 應回傳 200
 ```
 
-每張發票自動選擇最佳引擎，確保辨識成功率。
+## 環境變數說明
 
-### AI 驅動的智慧功能
+| 變數 | 必填 | 說明 | 取得方式 |
+|------|------|------|----------|
+| `LINE_CHANNEL_ID` | 選填 | LINE Channel ID | [LINE Developers Console](https://developers.line.biz/console/) → Channel 基本設定 |
+| `LINE_CHANNEL_SECRET` | **必填** | LINE Channel Secret | 同上 → Channel Secret |
+| `LINE_CHANNEL_ACCESS_TOKEN` | **必填** | LINE Channel Access Token | 同上 → Messaging API → 發行 Long-lived Token |
+| `GEMINI_API_KEY` | **必填** | Google Gemini API Key（OCR + AI 功能） | [Google AI Studio](https://aistudio.google.com/apikey)（免費額度） |
+| `GEMINI_MODEL` | 選填 | Gemini 模型名稱 | 預設 `gemini-2.5-flash` |
+| `LLM_ROUTER_URL` | 選填 | LLM Router 服務位址 | 自建 LLM Router，預設 `http://127.0.0.1:8010/chat` |
+| `HUNYUAN_OCR_API_KEY` | 選填 | HunyuanOCR 備援引擎 Token | [Hugging Face Tokens](https://huggingface.co/settings/tokens) |
+| `HUNYUAN_OCR_API_URL` | 選填 | HunyuanOCR API 端點 | 預設 `https://router.huggingface.co/hf-inference/models/tencent/HunyuanOCR` |
+| `EINVOICE_APP_ID` | 選填 | 電子發票 API App ID | [財政部電子發票平台](https://www.einvoice.nat.gov.tw) 申請 |
+| `EINVOICE_API_KEY` | 選填 | 電子發票 API Key | 同上 |
+| `GDRIVE_LOCAL` | 選填 | Google Drive 本地同步路徑 | 安裝 Google Drive 桌面版後的本地掛載路徑 |
+| `COMPANY_TAX_ID` | 選填 | 公司統一編號 | 用於稅務匯出 |
+| `COMPANY_TAX_REG_NO` | 選填 | 公司稅籍編號 | 用於稅務匯出 |
+| `COMPANY_NAME` | 選填 | 公司名稱 | 用於報表標題 |
+| `PUBLIC_BASE_URL` | 選填 | 公開 HTTPS URL | 你的 Cloudflare Tunnel / ngrok 網址 |
+| `PORT` | 選填 | 服務埠號 | 預設 `8025` |
+| `DB_PATH` | 選填 | SQLite 資料庫路徑 | 預設 `./data/shanbot.db` |
+| `LOG_LEVEL` | 選填 | 日誌等級 | `DEBUG` / `INFO` / `WARNING`，預設 `INFO` |
 
-- **Claude CLI Bridge** — 接入 Claude 做自然語言理解
-- **3-Tier LLM Fallback** — Claude CLI → LLM Router → Gemini
-- **食材成本計算** — 根據菜單自動計算每道菜的食材成本
-- **稅務分類** — 發票自動分類為可扣抵/不可扣抵
-
-### 排程自動化
+## 排程自動化
 
 | 排程 | 頻率 | 功能 |
 |------|------|------|
@@ -136,6 +187,10 @@ shanbot/
 | 報稅季整理 2-3 天 | 稅務匯出 1 分鐘完成 |
 | **每月耗時 ~20 小時** | **每月耗時 ~1 小時** |
 
+## 技術棧
+
+Python / FastAPI / SQLite / PaddleOCR / LINE Messaging API / Claude Code / Gemini API / PM2
+
 ## Roadmap
 
 - [x] v1.0 — 基礎 OCR + 菜單 + 財務報表
@@ -149,7 +204,7 @@ shanbot/
 
 ## 授權
 
-MIT License — 免費使用、修改、商用。
+MIT License — 免費使用、修改、商用。詳見 [LICENSE](LICENSE)。
 
 ## 關於
 
@@ -159,4 +214,4 @@ MIT License — 免費使用、修改、商用。
 
 ---
 
-*Built with FastAPI + PaddleOCR + LINE Messaging API + Claude AI*
+*Built with FastAPI + PaddleOCR + LINE Messaging API + Claude AI + Gemini*
