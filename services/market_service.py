@@ -150,7 +150,7 @@ def _fetch_farm_trans(category_code: str, target_date: date = None) -> list[dict
     # 篩選指定種類
     filtered = [
         item for item in data
-        if item.get("種類代碼", "").strip() == category_code
+        if (item.get("種類代碼") or "").strip() == category_code
     ]
 
     logger.info(
@@ -235,8 +235,11 @@ def fetch_poultry_eggs() -> list[dict]:
         logger.error(f"PoultryTransType API 回應解析失敗: {e}")
         return []
 
+    # API 可能回傳裸陣列或包裝格式 {"RS": "OK", "Data": [...]}
+    if isinstance(data, dict):
+        data = data.get("Data", [])
     if not isinstance(data, list):
-        logger.warning(f"PoultryTransType API 回傳非陣列格式: {type(data)}")
+        logger.warning(f"PoultryTransType API 回傳非預期格式: {type(data)}")
         return []
 
     logger.info(f"PoultryTransType 取得 {len(data)} 筆資料")
@@ -375,23 +378,37 @@ def cache_poultry_data(data: list[dict]):
         data: PoultryTransType API 回傳的資料列表
     """
     # 欄位對照：API 欄位名稱 → 食材搜尋關鍵字
-    field_mapping = {
+    # v1 中文欄位（舊格式）+ v2 英文欄位（新格式）
+    field_mapping_v1 = {
         "白肉雞(2.0Kg以上)": "白肉雞",
         "雞蛋(產地價)": "雞蛋",
+    }
+    field_mapping_v2 = {
+        "TaijinPrice_2.0kgup": "白肉雞",
+        "egg_Producer_Price": "雞蛋",
     }
 
     cached_count = 0
 
     for item in data:
-        # 解析日期：民國日期格式 YYY.MM.DD
-        raw_date = item.get("日期", "").strip()
-        item_date = _parse_roc_date(raw_date)
+        # 解析日期：支援民國格式 YYY.MM.DD 和西元格式 YYYY/MM/DD
+        raw_date = (item.get("日期") or item.get("TransDate") or "").strip()
+        if "/" in raw_date and len(raw_date) >= 10:
+            # 西元格式 2026/03/06
+            try:
+                item_date = date(*[int(x) for x in raw_date.split("/")])
+            except (ValueError, TypeError):
+                item_date = None
+        else:
+            item_date = _parse_roc_date(raw_date)
         if not item_date:
             continue
 
         date_str = item_date.isoformat()
 
-        for field_name, search_name in field_mapping.items():
+        # 自動偵測 v1 或 v2 欄位
+        mapping = field_mapping_v1 if "日期" in item else field_mapping_v2
+        for field_name, search_name in mapping.items():
             price = _safe_float(item.get(field_name))
             if price <= 0:
                 continue
