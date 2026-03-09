@@ -7,6 +7,7 @@ import requests
 logger = logging.getLogger("shanbot.line")
 
 API_BASE = "https://api.line.me"
+API_DATA_BASE = "https://api-data.line.me"
 
 
 class LineService:
@@ -177,7 +178,7 @@ class LineService:
         """下載使用者上傳的檔案/圖片"""
         try:
             resp = requests.get(
-                f"{API_BASE}/v2/bot/message/{message_id}/content",
+                f"{API_DATA_BASE}/v2/bot/message/{message_id}/content",
                 headers={"Authorization": f"Bearer {self.token}"},
                 timeout=30,
             )

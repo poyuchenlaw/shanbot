@@ -248,6 +248,29 @@ async def _handle_image(message_id: str, group_id: str, user_id: str, reply_toke
             line_service.reply(reply_token, reply)
         return
 
+    # 檢查是否在等待契約照片
+    if state == "waiting_contract_photo":
+        # 下載圖片 → 存本地 → 呼叫契約解析
+        if reply_token and line_service:
+            line_service.reply(reply_token, "📄 收到契約照片，AI 辨識中...")
+        image_bytes = line_service.get_content(message_id) if line_service else None
+        if not image_bytes:
+            if line_service:
+                line_service.push(group_id, "❌ 圖片下載失敗，請重新上傳")
+            return
+        # Save locally
+        images_dir = os.path.join(os.path.dirname(__file__), "data", "images")
+        os.makedirs(images_dir, exist_ok=True)
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        local_path = os.path.join(images_dir, f"contract_{ts}.jpg")
+        with open(local_path, "wb") as f:
+            f.write(image_bytes)
+        from handlers.command_handler import handle_contract_upload
+        reply = await handle_contract_upload(local_path, group_id)
+        if reply and line_service:
+            line_service.push(group_id, reply)
+        return
+
     # 從拍照按鈕進入（或直接傳圖）→ 收據/對帳單 OCR
     if state == "waiting_receipt_photo":
         sm.clear_state(group_id)  # 清除暫態，photo_handler 會設新狀態

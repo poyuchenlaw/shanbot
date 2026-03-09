@@ -415,21 +415,26 @@ async def _handle_quick_confirm(line_service, params: dict, group_id: str, reply
                            f"記錄 #{staging_id} 需填寫經手人姓名：")
         return
 
-    sm.confirm_staging(staging_id)
+    # 進入二次確認流程
     items = sm.get_purchase_items(staging_id)
-    for item in items:
-        if item.get("ingredient_id"):
-            sm.update_ingredient_price(item["ingredient_id"], item["unit_price"])
+    sm.set_state(group_id, "waiting_final_confirm", {"staging_id": staging_id})
 
-    # GDrive 正式歸檔（共用 command_handler 的輔助函數）
-    from handlers.command_handler import _do_archive
-    gdrive_note = await _do_archive(staging_id, staging)
+    try:
+        from services.ocr_service import build_final_confirm_flex
+        flex = build_final_confirm_flex(staging_id, staging, items)
+        success = line_service.reply_flex(reply_token, "📋 最終確認", flex)
+        if success:
+            return
+    except Exception as e:
+        logger.warning(f"Final confirm flex failed: {e}")
 
     line_service.reply(reply_token,
-                       f"✅ #{staging_id} 已確認\n"
+                       f"📋 最終確認 #{staging_id}\n"
                        f"供應商：{staging['supplier_name']}\n"
-                       f"金額：${staging['total_amount']:,.0f}"
-                       f"{gdrive_note}")
+                       f"金額：${staging['total_amount']:,.0f}\n"
+                       f"品項數：{len(items)} 項\n\n"
+                       f"回覆「最終確認」確認歸檔\n"
+                       f"回覆「拒絕」不予理會")
 
 
 def _handle_quick_edit(line_service, params: dict, group_id: str, reply_token: str):
@@ -438,11 +443,10 @@ def _handle_quick_edit(line_service, params: dict, group_id: str, reply_token: s
     if not staging:
         line_service.reply(reply_token, f"找不到記錄 #{staging_id}")
         return
-    sm.set_state(group_id, "waiting_edit", {"staging_id": staging_id})
-    line_service.reply(reply_token,
-                       f"✏️ 修改模式 #{staging_id}\n"
-                       "格式：供應商=名稱 / 日期=YYYY-MM-DD / 總額=金額\n"
-                       "輸入「完成修改」結束")
+    # Use the full _start_edit to show current data + instructions
+    from handlers.command_handler import _start_edit
+    reply_text = _start_edit(staging_id, group_id)
+    line_service.reply(reply_token, reply_text)
 
 
 def _handle_quick_discard(line_service, params: dict, reply_token: str):

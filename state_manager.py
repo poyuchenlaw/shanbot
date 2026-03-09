@@ -240,6 +240,49 @@ CREATE TABLE IF NOT EXISTS financial_documents (
     created_at TEXT DEFAULT (datetime('now','localtime')),
     confirmed_at TEXT
 );
+
+-- 16. 員工主檔
+CREATE TABLE IF NOT EXISTS employees (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    id_number TEXT,
+    position TEXT,
+    department TEXT,
+    hire_date TEXT,
+    leave_date TEXT,
+    base_salary INTEGER,
+    meal_allowance INTEGER DEFAULT 2400,
+    labor_insurance_grade INTEGER,
+    health_insurance_grade INTEGER,
+    pension_self_rate REAL DEFAULT 0,
+    tax_dependents INTEGER DEFAULT 0,
+    bank_account TEXT,
+    contract_gdrive_path TEXT,
+    status TEXT DEFAULT 'active',
+    created_at TEXT DEFAULT (datetime('now','localtime')),
+    updated_at TEXT DEFAULT (datetime('now','localtime'))
+);
+
+-- 17. 薪資明細
+CREATE TABLE IF NOT EXISTS payroll (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    employee_id INTEGER REFERENCES employees(id),
+    year_month TEXT NOT NULL,
+    base_salary INTEGER,
+    meal_allowance INTEGER,
+    overtime_hours REAL DEFAULT 0,
+    overtime_pay INTEGER DEFAULT 0,
+    bonus INTEGER DEFAULT 0,
+    gross_salary INTEGER,
+    labor_insurance INTEGER,
+    health_insurance INTEGER,
+    pension_self INTEGER DEFAULT 0,
+    income_tax INTEGER,
+    other_deductions INTEGER DEFAULT 0,
+    net_salary INTEGER,
+    status TEXT DEFAULT 'draft',
+    created_at TEXT DEFAULT (datetime('now','localtime'))
+);
 """
 
 _SEED_ACCOUNT_MAPPING = """
@@ -275,6 +318,12 @@ def init_db():
     conn = _get_conn()
     conn.executescript(_SCHEMA)
     conn.executescript(_SEED_ACCOUNT_MAPPING)
+    # 遷移：加入 image_hash 欄位（既有 DB 相容）
+    try:
+        conn.execute("ALTER TABLE purchase_staging ADD COLUMN image_hash TEXT")
+        logger.info("Migration: added image_hash column to purchase_staging")
+    except sqlite3.OperationalError:
+        pass  # 欄位已存在
     conn.commit()
     conn.close()
     logger.info(f"Database initialized: {DB_PATH}")
@@ -444,6 +493,30 @@ def get_staging(staging_id: int) -> Optional[dict]:
     return dict(row) if row else None
 
 
+def find_by_hash(image_hash: str) -> Optional[dict]:
+    """查詢是否有相同 image_hash 的非棄用記錄"""
+    conn = _get_conn()
+    row = conn.execute(
+        "SELECT id, supplier_name, total_amount, purchase_date, status, created_at "
+        "FROM purchase_staging WHERE image_hash = ? AND status != 'discarded' "
+        "ORDER BY created_at DESC LIMIT 1",
+        (image_hash,),
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def update_staging_hash(staging_id: int, image_hash: str):
+    """儲存圖片 hash 到暫存記錄"""
+    conn = _get_conn()
+    conn.execute(
+        "UPDATE purchase_staging SET image_hash = ? WHERE id = ?",
+        (image_hash, staging_id),
+    )
+    conn.commit()
+    conn.close()
+
+
 def get_pending_stagings(chat_id: str = None) -> list[dict]:
     conn = _get_conn()
     if chat_id:
@@ -509,6 +582,22 @@ def get_purchase_items(staging_id: int) -> list[dict]:
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+def update_purchase_item(item_id: int, **kwargs):
+    """更新單一採購品項欄位"""
+    if not kwargs:
+        return
+    conn = _get_conn()
+    sets = []
+    vals = []
+    for k, v in kwargs.items():
+        sets.append(f"{k}=?")
+        vals.append(v)
+    vals.append(item_id)
+    conn.execute(f"UPDATE purchase_items SET {', '.join(sets)} WHERE id=?", vals)
+    conn.commit()
+    conn.close()
 
 
 # === 價格歷史 ===
@@ -885,6 +974,7 @@ def get_table_counts() -> dict:
         "price_history", "recipes", "recipe_ingredients", "menu_schedule",
         "monthly_cost", "config", "tax_exports", "account_mapping",
         "conversation_state", "income", "financial_documents",
+        "employees", "payroll",
     ]
     conn = _get_conn()
     counts = {}
@@ -999,3 +1089,111 @@ def get_financial_doc_summary(year_month: str) -> dict:
         result["total"] += d["cnt"]
         result["confirmed"] += d["confirmed"]
     return result
+
+
+# === 員工 ===
+
+def add_employee(**kwargs) -> int:
+    """新增員工，回傳 id"""
+    conn = _get_conn()
+    cols = list(kwargs.keys())
+    placeholders = ", ".join(["?"] * len(cols))
+    vals = list(kwargs.values())
+    cur = conn.execute(
+        f"INSERT INTO employees ({', '.join(cols)}) VALUES ({placeholders})", vals
+    )
+    conn.commit()
+    emp_id = cur.lastrowid
+    conn.close()
+    return emp_id
+
+
+def get_employee(employee_id: int) -> Optional[dict]:
+    """取得單一員工資料"""
+    conn = _get_conn()
+    row = conn.execute("SELECT * FROM employees WHERE id=?", (employee_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def get_employee_by_name(name: str) -> Optional[dict]:
+    """以姓名查詢員工"""
+    conn = _get_conn()
+    row = conn.execute(
+        "SELECT * FROM employees WHERE name=? AND status='active'", (name,)
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def list_employees(status: str = "active") -> list[dict]:
+    """列出員工（預設只列在職）"""
+    conn = _get_conn()
+    if status:
+        rows = conn.execute(
+            "SELECT * FROM employees WHERE status=? ORDER BY name", (status,)
+        ).fetchall()
+    else:
+        rows = conn.execute("SELECT * FROM employees ORDER BY name").fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def update_employee(employee_id: int, **kwargs):
+    """更新員工欄位"""
+    if not kwargs:
+        return
+    conn = _get_conn()
+    sets = []
+    vals = []
+    for k, v in kwargs.items():
+        sets.append(f"{k}=?")
+        vals.append(v)
+    sets.append("updated_at=datetime('now','localtime')")
+    vals.append(employee_id)
+    conn.execute(f"UPDATE employees SET {', '.join(sets)} WHERE id=?", vals)
+    conn.commit()
+    conn.close()
+
+
+# === 薪資 ===
+
+def add_payroll(**kwargs) -> int:
+    """新增薪資記錄，回傳 id"""
+    conn = _get_conn()
+    cols = list(kwargs.keys())
+    placeholders = ", ".join(["?"] * len(cols))
+    vals = list(kwargs.values())
+    cur = conn.execute(
+        f"INSERT INTO payroll ({', '.join(cols)}) VALUES ({placeholders})", vals
+    )
+    conn.commit()
+    payroll_id = cur.lastrowid
+    conn.close()
+    return payroll_id
+
+
+def get_payroll(year_month: str, employee_id: int = None) -> list[dict]:
+    """取得薪資記錄"""
+    conn = _get_conn()
+    if employee_id:
+        rows = conn.execute(
+            "SELECT p.*, e.name as employee_name FROM payroll p "
+            "JOIN employees e ON p.employee_id = e.id "
+            "WHERE p.year_month=? AND p.employee_id=? ORDER BY e.name",
+            (year_month, employee_id),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT p.*, e.name as employee_name FROM payroll p "
+            "JOIN employees e ON p.employee_id = e.id "
+            "WHERE p.year_month=? ORDER BY e.name",
+            (year_month,),
+        ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def list_payroll(year_month: str) -> list[dict]:
+    """列出指定月份所有薪資記錄"""
+    return get_payroll(year_month)

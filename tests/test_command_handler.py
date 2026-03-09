@@ -126,7 +126,8 @@ class TestConfirmDiscard(unittest.TestCase):
     def tearDown(self):
         _teardown_db(self.db_path)
 
-    def test_confirm_success(self):
+    def test_confirm_triggers_final(self):
+        """確認 now triggers two-step: first shows final confirm prompt"""
         import state_manager as sm
         from handlers.command_handler import handle_text
         sid = sm.add_purchase_staging("U001", "C001", purchase_date="2026-03-15")
@@ -134,8 +135,33 @@ class TestConfirmDiscard(unittest.TestCase):
                                    total_amount=5000, year_month="2026-03")
         result = _run(handle_text(self.line_svc, f"確認 #{sid}",
                                   "C001", "U001", "User", "RT001"))
-        self.assertIn("已確認", result)
+        self.assertIn("最終確認", result)
         self.assertIn("好鮮水產行", result)
+
+    def test_final_confirm_archives(self):
+        """最終確認 actually archives the record"""
+        import state_manager as sm
+        from handlers.command_handler import handle_text
+        sid = sm.add_purchase_staging("U001", "C001", purchase_date="2026-03-15")
+        sm.update_purchase_staging(sid, supplier_name="好鮮水產行",
+                                   total_amount=5000, year_month="2026-03")
+        sm.set_state("C001", "waiting_final_confirm", {"staging_id": sid})
+        result = _run(handle_text(self.line_svc, f"最終確認 #{sid}",
+                                  "C001", "U001", "User", "RT001"))
+        self.assertIn("已確認", result)
+
+    def test_reject_discards(self):
+        """拒絕 discards the record"""
+        import state_manager as sm
+        from handlers.command_handler import handle_text
+        sid = sm.add_purchase_staging("U001", "C001")
+        sm.update_purchase_staging(sid, year_month="2026-03")
+        sm.set_state("C001", "waiting_final_confirm", {"staging_id": sid})
+        result = _run(handle_text(self.line_svc, f"拒絕 #{sid}",
+                                  "C001", "U001", "User", "RT001"))
+        self.assertIn("不予理會", result)
+        staging = sm.get_staging(sid)
+        self.assertEqual(staging["status"], "discarded")
 
     def test_confirm_nonexistent(self):
         from handlers.command_handler import handle_text
@@ -186,7 +212,7 @@ class TestConfirmDiscard(unittest.TestCase):
         self.assertEqual(state, "waiting_handler")
 
     def test_confirm_without_hash(self):
-        """確認 1 也可以（不帶 #）"""
+        """確認 1 也可以（不帶 #）— now triggers two-step"""
         import state_manager as sm
         from handlers.command_handler import handle_text
         sid = sm.add_purchase_staging("U001", "C001")
@@ -194,7 +220,7 @@ class TestConfirmDiscard(unittest.TestCase):
                                    year_month="2026-03")
         result = _run(handle_text(self.line_svc, f"確認 {sid}",
                                   "C001", "U001", "User", "RT001"))
-        self.assertIn("已確認", result)
+        self.assertIn("最終確認", result)
 
 
 class TestEditMode(unittest.TestCase):
@@ -218,7 +244,7 @@ class TestEditMode(unittest.TestCase):
                                   "C001", "U001", "User", "RT001"))
         self.assertIn("修改記錄", result)
         self.assertIn("高麗菜", result)
-        self.assertIn("完成修改", result)
+        self.assertIn("請直接說要改什麼", result)
 
     def test_edit_supplier(self):
         import state_manager as sm
@@ -259,20 +285,22 @@ class TestEditMode(unittest.TestCase):
                                   "C001", "U001", "User", "RT001"))
         self.assertIn("2026-03-20", result)
 
-    def test_finish_edit(self):
+    def test_confirm_from_edit(self):
+        """在修改模式中直接回覆「同意」→ 進入最終確認"""
         import state_manager as sm
         from handlers.command_handler import handle_text
         sid = sm.add_purchase_staging("U001", "C001")
         sm.update_purchase_staging(sid, total_amount=100)
         _run(handle_text(self.line_svc, f"修改 #{sid}",
                          "C001", "U001", "User", "RT001"))
-        result = _run(handle_text(self.line_svc, "完成修改",
+        result = _run(handle_text(self.line_svc, "同意",
                                   "C001", "U001", "User", "RT001"))
-        self.assertIn("修改完成", result)
+        self.assertIn("最終確認", result)
         state, _ = sm.get_state("C001")
-        self.assertEqual(state, "idle")
+        self.assertEqual(state, "waiting_final_confirm")
 
-    def test_edit_invalid_format(self):
+    def test_edit_unrecognized_input(self):
+        """LLM 不可用時，無法辨識的輸入應提示使用者"""
         import state_manager as sm
         from handlers.command_handler import handle_text
         sid = sm.add_purchase_staging("U001", "C001")
@@ -281,7 +309,7 @@ class TestEditMode(unittest.TestCase):
                          "C001", "U001", "User", "RT001"))
         result = _run(handle_text(self.line_svc, "隨便打的",
                                   "C001", "U001", "User", "RT001"))
-        self.assertIn("格式不正確", result)
+        self.assertIn("不太確定", result)
 
 
 class TestStateMachine(unittest.TestCase):
@@ -295,7 +323,7 @@ class TestStateMachine(unittest.TestCase):
         _teardown_db(self.db_path)
 
     def test_handler_response_flow(self):
-        """經手人回應流程"""
+        """經手人回應流程（二次確認）"""
         import state_manager as sm
         from handlers.command_handler import handle_text
 
@@ -309,10 +337,16 @@ class TestStateMachine(unittest.TestCase):
         state, data = sm.get_state("C001")
         self.assertEqual(state, "waiting_handler")
 
-        # 輸入經手人
+        # 輸入經手人 → now triggers two-step confirm (final confirm prompt)
         result = _run(handle_text(self.line_svc, "王小美", "C001", "U001", "User", "RT001"))
-        self.assertIn("已確認", result)
         self.assertIn("王小美", result)
+        self.assertIn("最終確認", result)
+        state, _ = sm.get_state("C001")
+        self.assertEqual(state, "waiting_final_confirm")
+
+        # 最終確認 → actually archives
+        result2 = _run(handle_text(self.line_svc, "最終確認", "C001", "U001", "User", "RT001"))
+        self.assertIn("已確認", result2)
         staging = sm.get_staging(sid)
         self.assertEqual(staging["status"], "confirmed")
 
@@ -331,7 +365,7 @@ class TestStateMachine(unittest.TestCase):
         self.assertEqual(staging["supplier_name"], "好鮮水產行")
 
     def test_confirm_response_confirm(self):
-        """確認狀態 → 回覆「確認」"""
+        """確認狀態 → 回覆「確認」→ 二次確認流程"""
         import state_manager as sm
         from handlers.command_handler import handle_text
 
@@ -340,9 +374,17 @@ class TestStateMachine(unittest.TestCase):
                                    year_month="2026-03")
         sm.set_state("C001", "waiting_confirm", {"staging_id": sid})
 
+        # Step 1: "確認" now shows final confirm prompt (two-step)
         result = _run(handle_text(self.line_svc, "確認",
                                   "C001", "U001", "User", "RT001"))
-        self.assertIn("已確認", result)
+        self.assertIn("最終確認", result)
+        state, _ = sm.get_state("C001")
+        self.assertEqual(state, "waiting_final_confirm")
+
+        # Step 2: "最終確認" → actually archives
+        result2 = _run(handle_text(self.line_svc, "最終確認",
+                                   "C001", "U001", "User", "RT001"))
+        self.assertIn("已確認", result2)
 
     def test_confirm_response_discard(self):
         """確認狀態 → 回覆「捨棄」"""

@@ -691,20 +691,17 @@ def build_review_flex(result: OcrResult, staging_id: int) -> dict:
              "text": "以下品項請特別確認：\n" + "\n".join(q_lines),
              "size": "xs", "color": "#DD2E44", "wrap": True, "margin": "md"})
 
-    # 操作按鈕
+    # 操作按鈕（同意 + 修改）
     flex["footer"]["contents"].extend([
         {
             "type": "box", "layout": "horizontal", "margin": "md", "spacing": "sm",
             "contents": [
                 {"type": "button", "style": "primary", "color": "#00C853",
-                 "action": {"type": "message", "label": "✅ 確認",
+                 "action": {"type": "message", "label": "✅ 同意",
                            "text": f"確認 #{staging_id}"}},
                 {"type": "button", "style": "secondary",
                  "action": {"type": "message", "label": "✏️ 修改",
                            "text": f"修改 #{staging_id}"}},
-                {"type": "button", "style": "secondary", "color": "#FF0000",
-                 "action": {"type": "message", "label": "❌ 捨棄",
-                           "text": f"捨棄 #{staging_id}"}},
             ],
         },
     ])
@@ -716,3 +713,55 @@ def build_review_flex(result: OcrResult, staging_id: int) -> dict:
          "size": "xxs", "color": "#999999", "align": "center", "margin": "md"})
 
     return flex
+
+
+def build_final_confirm_flex(staging_id: int, staging: dict, items: list) -> dict:
+    """生成最終確認 Flex Message（二次確認）"""
+    supplier = staging.get("supplier_name", "未知")
+    purchase_date = staging.get("purchase_date", "未知")
+    total = staging.get("total_amount", 0)
+    item_count = len(items)
+
+    return {
+        "type": "bubble",
+        "size": "kilo",
+        "header": {
+            "type": "box",
+            "layout": "vertical",
+            "contents": [
+                {"type": "text", "text": "📋 最終確認",
+                 "weight": "bold", "size": "lg", "color": "#333333"},
+            ],
+        },
+        "body": {
+            "type": "box",
+            "layout": "vertical",
+            "spacing": "sm",
+            "contents": [
+                {"type": "text", "text": f"供應商：{supplier}",
+                 "size": "sm", "color": "#555555"},
+                {"type": "text", "text": f"日期：{purchase_date}",
+                 "size": "sm", "color": "#555555"},
+                {"type": "text", "text": f"金額：${total:,.0f}",
+                 "size": "md", "weight": "bold", "color": "#333333"},
+                {"type": "text", "text": f"品項數：{item_count} 項",
+                 "size": "sm", "color": "#555555"},
+                {"type": "separator", "margin": "md"},
+                {"type": "text", "text": "確認歸檔後將存入 GDrive",
+                 "size": "xs", "color": "#999999", "margin": "md"},
+            ],
+        },
+        "footer": {
+            "type": "box",
+            "layout": "horizontal",
+            "spacing": "sm",
+            "contents": [
+                {"type": "button", "style": "primary", "color": "#00C853",
+                 "action": {"type": "message", "label": "✅ 確認歸檔",
+                           "text": f"最終確認 #{staging_id}"}},
+                {"type": "button", "style": "primary", "color": "#DD2E44",
+                 "action": {"type": "message", "label": "❌ 不予理會",
+                           "text": f"拒絕 #{staging_id}"}},
+            ],
+        },
+    }

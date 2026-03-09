@@ -65,7 +65,7 @@ class TestOcrConfirmState(unittest.TestCase):
 
 
 class TestOcrConfirmWords(unittest.TestCase):
-    """Test 2: 回覆 ok / 好 / OK / 👍 → 確認成功，state 清除"""
+    """Test 2: 回覆 ok / 好 / OK / 👍 → 進入二次確認（waiting_final_confirm）"""
 
     def setUp(self):
         self.db_path = _setup_db()
@@ -78,8 +78,14 @@ class TestOcrConfirmWords(unittest.TestCase):
         import state_manager as sm
         from handlers.command_handler import handle_text
         sid = _create_pending_staging(sm)
+        # Step 1: "ok" triggers two-step confirm → shows final confirm prompt
         result = _run(handle_text(self.line_svc, "ok", "C001", "U001", "User", "RT001"))
-        self.assertIn("已確認", result)
+        self.assertIn("最終確認", result)
+        state, data = sm.get_state("C001")
+        self.assertEqual(state, "waiting_final_confirm")
+        # Step 2: "最終確認" → actually archives → state cleared
+        result2 = _run(handle_text(self.line_svc, "最終確認", "C001", "U001", "User", "RT001"))
+        self.assertIn("已確認", result2)
         state, _ = sm.get_state("C001")
         self.assertEqual(state, "idle")
 
@@ -88,27 +94,31 @@ class TestOcrConfirmWords(unittest.TestCase):
         from handlers.command_handler import handle_text
         _create_pending_staging(sm)
         result = _run(handle_text(self.line_svc, "OK", "C001", "U001", "User", "RT001"))
-        self.assertIn("已確認", result)
+        self.assertIn("最終確認", result)
 
     def test_hao(self):
         import state_manager as sm
         from handlers.command_handler import handle_text
         _create_pending_staging(sm)
         result = _run(handle_text(self.line_svc, "好", "C001", "U001", "User", "RT001"))
-        self.assertIn("已確認", result)
+        self.assertIn("最終確認", result)
 
     def test_thumbs_up(self):
         import state_manager as sm
         from handlers.command_handler import handle_text
         _create_pending_staging(sm)
         result = _run(handle_text(self.line_svc, "👍", "C001", "U001", "User", "RT001"))
-        self.assertIn("已確認", result)
+        self.assertIn("最終確認", result)
 
     def test_staging_confirmed(self):
+        """Full two-step: ok → 最終確認 → staging becomes confirmed"""
         import state_manager as sm
         from handlers.command_handler import handle_text
         sid = _create_pending_staging(sm)
+        # Step 1: triggers two-step confirm
         _run(handle_text(self.line_svc, "ok", "C001", "U001", "User", "RT001"))
+        # Step 2: final confirm → actually archives
+        _run(handle_text(self.line_svc, "最終確認", "C001", "U001", "User", "RT001"))
         staging = sm.get_staging(sid)
         self.assertEqual(staging["status"], "confirmed")
 
@@ -194,8 +204,8 @@ class TestStickerConfirm(unittest.TestCase):
         _teardown_db(self.db_path)
 
     def test_sticker_confirms(self):
+        """Sticker triggers two-step: _confirm_staging → waiting_final_confirm → _do_final_archive"""
         import state_manager as sm
-        # Import the function we need to test directly
         sid = _create_pending_staging(sm)
 
         # Simulate what _handle_sticker does
@@ -205,10 +215,19 @@ class TestStickerConfirm(unittest.TestCase):
         staging_id = state_data.get("staging_id")
         self.assertEqual(staging_id, sid)
 
-        from handlers.command_handler import _confirm_staging
+        from handlers.command_handler import _confirm_staging, _do_final_archive
         sm.clear_state("C001")
+
+        # Step 1: _confirm_staging now shows final confirm prompt (two-step)
         result = _run(_confirm_staging(staging_id, "C001"))
-        self.assertIn("已確認", result)
+        self.assertIn("最終確認", result)
+        state, data = sm.get_state("C001")
+        self.assertEqual(state, "waiting_final_confirm")
+
+        # Step 2: _do_final_archive actually archives
+        sm.clear_state("C001")
+        result2 = _run(_do_final_archive(staging_id, "C001"))
+        self.assertIn("已確認", result2)
 
         # State should be cleared
         state, _ = sm.get_state("C001")

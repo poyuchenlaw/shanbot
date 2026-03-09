@@ -345,3 +345,77 @@ def _find_recipe(name: str) -> dict | None:
         if r["name"] == name or name in r["name"]:
             return r
     return None
+
+
+# === 菜單 Excel 模板 + 匯入（Batch 2 新增）===
+
+async def handle_menu_template(line_service, group_id: str) -> str | None:
+    """建立菜單 Excel 模板 — 由 command_handler 路由呼叫"""
+    from datetime import datetime
+    try:
+        from services.salary_service import generate_menu_template
+        ym = datetime.now().strftime("%Y-%m")
+        filepath = generate_menu_template(ym)
+        return (
+            f"✅ 菜單排程表已建立\n"
+            f"📅 月份：{ym}\n"
+            f"📁 路徑：{filepath}\n\n"
+            f"請到 Google Drive 開啟 Excel 填寫菜單\n"
+            f"填完後回覆「菜單完成」匯入系統"
+        )
+    except Exception as e:
+        logger.error(f"Menu template error: {e}", exc_info=True)
+        return f"建立菜單表格失敗：{str(e)}"
+
+
+async def handle_menu_import(line_service, group_id: str) -> str | None:
+    """匯入已填寫的菜單 — 由 command_handler 路由呼叫"""
+    from datetime import datetime
+    try:
+        from services.salary_service import parse_menu_excel
+        from services.gdrive_service import GDRIVE_LOCAL
+
+        ym = datetime.now().strftime("%Y-%m")
+        parts = ym.split("-")
+        year = parts[0]
+        month = f"{int(parts[1]):02d}月"
+        filepath = os.path.join(GDRIVE_LOCAL, year, month, "菜單企劃", f"菜單_{ym}.xlsx")
+
+        if not os.path.exists(filepath):
+            return (
+                f"找不到菜單檔案\n"
+                f"預期路徑：{filepath}\n\n"
+                f"請先輸入「菜單表格」建立模板，填寫後再回覆「菜單完成」"
+            )
+
+        records = parse_menu_excel(filepath)
+        if not records:
+            return "菜單表格是空的，請先填寫菜色後再匯入"
+
+        # Import to DB
+        imported = 0
+        for rec in records:
+            try:
+                sm.add_menu_schedule(
+                    schedule_date=rec["date"],
+                    slot=rec["slot"],
+                    meal_type=rec["meal_type"],
+                )
+                imported += 1
+            except Exception as e:
+                logger.warning(f"Menu import row error: {e}")
+
+        dates = sorted(set(r["date"] for r in records))
+        lunch_count = sum(1 for r in records if r["meal_type"] == "lunch")
+        dinner_count = sum(1 for r in records if r["meal_type"] == "dinner")
+
+        return (
+            f"✅ 菜單匯入完成 — {ym}\n"
+            f"📅 涵蓋 {len(dates)} 天\n"
+            f"🍱 午餐菜色 {lunch_count} 道\n"
+            f"🍽️ 晚餐菜色 {dinner_count} 道\n"
+            f"📊 共 {len(records)} 筆記錄"
+        )
+    except Exception as e:
+        logger.error(f"Menu import error: {e}", exc_info=True)
+        return f"匯入菜單失敗：{str(e)}"

@@ -660,6 +660,7 @@ class TestQuickActions(unittest.TestCase):
 
     @patch("handlers.postback_handler.sm")
     def test_confirm_success(self, mock_sm):
+        """Confirm now shows final confirm prompt (two-step) instead of immediately archiving"""
         from handlers.postback_handler import handle_postback
         mock_sm.get_staging.return_value = {
             "id": 42, "status": "pending", "supplier_name": "好鮮水產行",
@@ -669,14 +670,20 @@ class TestQuickActions(unittest.TestCase):
         mock_sm.get_purchase_items.return_value = [
             {"ingredient_id": 10, "unit_price": 35},
         ]
+        # reply_flex fails so it falls back to reply text
+        self.line_svc.reply_flex.return_value = False
         _run(handle_postback(
             self.line_svc, "action=confirm&id=42",
             "G001", "U001", "RT001"))
-        mock_sm.confirm_staging.assert_called_once_with(42)
-        mock_sm.update_ingredient_price.assert_called_once_with(10, 35)
+        # Should NOT immediately archive — it's now two-step
+        mock_sm.confirm_staging.assert_not_called()
+        # Should set waiting_final_confirm state
+        mock_sm.set_state.assert_called_once_with(
+            "G001", "waiting_final_confirm", {"staging_id": 42})
+        # Should show final confirm prompt
         msg = self.line_svc.reply.call_args[0][1]
+        self.assertIn("最終確認", msg)
         self.assertIn("#42", msg)
-        self.assertIn("已確認", msg)
         self.assertIn("好鮮水產行", msg)
         self.assertIn("5,000", msg)
 
@@ -734,7 +741,7 @@ class TestQuickActions(unittest.TestCase):
 
     @patch("handlers.postback_handler.sm")
     def test_confirm_with_handler_already_set(self, mock_sm):
-        """無統一發票但已有經手人 → 直接確認"""
+        """無統一發票但已有經手人 → 進入二次確認（不直接歸檔）"""
         from handlers.postback_handler import handle_postback
         mock_sm.get_staging.return_value = {
             "id": 42, "status": "pending", "supplier_name": "菜市場阿嬤",
@@ -743,16 +750,21 @@ class TestQuickActions(unittest.TestCase):
         }
         mock_sm.get_supplier.return_value = {"has_uniform_invoice": False}
         mock_sm.get_purchase_items.return_value = []
+        self.line_svc.reply_flex.return_value = False
         _run(handle_postback(
             self.line_svc, "action=confirm&id=42",
             "G001", "U001", "RT001"))
-        mock_sm.confirm_staging.assert_called_once_with(42)
+        # Should NOT immediately archive — two-step confirm
+        mock_sm.confirm_staging.assert_not_called()
+        # Should set waiting_final_confirm state
+        mock_sm.set_state.assert_called_once_with(
+            "G001", "waiting_final_confirm", {"staging_id": 42})
         msg = self.line_svc.reply.call_args[0][1]
-        self.assertIn("已確認", msg)
+        self.assertIn("最終確認", msg)
 
     @patch("handlers.postback_handler.sm")
     def test_confirm_updates_multiple_ingredient_prices(self, mock_sm):
-        """確認時更新多個食材價格"""
+        """Confirm now enters two-step — price updates happen at final archive, not here"""
         from handlers.postback_handler import handle_postback
         mock_sm.get_staging.return_value = {
             "id": 10, "status": "pending", "supplier_name": "大同蔬果",
@@ -762,18 +774,25 @@ class TestQuickActions(unittest.TestCase):
         mock_sm.get_purchase_items.return_value = [
             {"ingredient_id": 1, "unit_price": 30},
             {"ingredient_id": 2, "unit_price": 50},
-            {"ingredient_id": None, "unit_price": 25},  # 無 ingredient_id，不更新
+            {"ingredient_id": None, "unit_price": 25},
         ]
+        self.line_svc.reply_flex.return_value = False
         _run(handle_postback(
             self.line_svc, "action=confirm&id=10",
             "G001", "U001", "RT001"))
-        self.assertEqual(mock_sm.update_ingredient_price.call_count, 2)
-        mock_sm.update_ingredient_price.assert_any_call(1, 30)
-        mock_sm.update_ingredient_price.assert_any_call(2, 50)
+        # Two-step confirm: no immediate archive or price update
+        mock_sm.confirm_staging.assert_not_called()
+        mock_sm.update_ingredient_price.assert_not_called()
+        # Should set waiting_final_confirm state
+        mock_sm.set_state.assert_called_once_with(
+            "G001", "waiting_final_confirm", {"staging_id": 10})
+        msg = self.line_svc.reply.call_args[0][1]
+        self.assertIn("最終確認", msg)
+        self.assertIn("#10", msg)
 
     @patch("handlers.postback_handler.sm")
     def test_confirm_no_supplier_record(self, mock_sm):
-        """supplier 查不到（None）→ 直接確認不檢查經手人"""
+        """supplier 查不到（None）→ 進入二次確認（不立即歸檔）"""
         from handlers.postback_handler import handle_postback
         mock_sm.get_staging.return_value = {
             "id": 7, "status": "pending", "supplier_name": "X",
@@ -781,26 +800,36 @@ class TestQuickActions(unittest.TestCase):
         }
         mock_sm.get_supplier.return_value = None
         mock_sm.get_purchase_items.return_value = []
+        self.line_svc.reply_flex.return_value = False
         _run(handle_postback(
             self.line_svc, "action=confirm&id=7",
             "G001", "U001", "RT001"))
-        mock_sm.confirm_staging.assert_called_once_with(7)
+        # Two-step confirm: no immediate archive
+        mock_sm.confirm_staging.assert_not_called()
+        mock_sm.set_state.assert_called_once_with(
+            "G001", "waiting_final_confirm", {"staging_id": 7})
 
     # --- edit ---
 
+    @patch("handlers.command_handler.sm")
     @patch("handlers.postback_handler.sm")
-    def test_edit_success(self, mock_sm):
+    def test_edit_success(self, mock_pb_sm, mock_cmd_sm):
+        """Edit delegates to command_handler._start_edit, so both sm modules need mocking"""
         from handlers.postback_handler import handle_postback
-        mock_sm.get_staging.return_value = {
+        staging_data = {
             "id": 42, "status": "pending", "supplier_name": "A",
+            "purchase_date": "2026-03-01", "total_amount": 1000,
         }
+        mock_pb_sm.get_staging.return_value = staging_data
+        mock_cmd_sm.get_staging.return_value = staging_data
+        mock_cmd_sm.get_purchase_items.return_value = []
         _run(handle_postback(
             self.line_svc, "action=edit&id=42",
             "G001", "U001", "RT001"))
-        mock_sm.set_state.assert_called_once_with(
+        mock_cmd_sm.set_state.assert_called_once_with(
             "G001", "waiting_edit", {"staging_id": 42})
         msg = self.line_svc.reply.call_args[0][1]
-        self.assertIn("修改模式", msg)
+        self.assertIn("修改", msg)
         self.assertIn("#42", msg)
 
     @patch("handlers.postback_handler.sm")

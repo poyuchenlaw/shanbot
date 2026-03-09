@@ -2,6 +2,7 @@
 
 import json
 import logging
+import os
 import re
 from typing import Optional
 
@@ -44,8 +45,21 @@ async def handle_text(line_service, text: str, group_id: str,
     if state == "waiting_finance_search":
         return _handle_finance_search(text, group_id)
 
+    if state == "waiting_contract_photo":
+        # Text in contract-waiting state — cancel or prompt
+        if text.strip() in ("取消", "cancel", "算了"):
+            sm.clear_state(group_id)
+            return "已取消上傳契約"
+        return "📄 請傳送契約照片或 PDF 檔案\n回覆「取消」可取消"
+
     if state == "waiting_ocr_confirm":
         return await _handle_ocr_confirm_response(text, group_id, state_data)
+
+    if state == "waiting_duplicate_decision":
+        return await _handle_duplicate_decision(line_service, text, group_id, user_id, state_data)
+
+    if state == "waiting_final_confirm":
+        return await _handle_final_confirm_response(text, group_id, state_data)
 
     # 2. 確認/修改/捨棄指令
     confirm_match = re.match(r"確認\s*#?(\d+)", text)
@@ -62,6 +76,31 @@ async def handle_text(line_service, text: str, group_id: str,
     if edit_match:
         staging_id = int(edit_match.group(1))
         return _start_edit(staging_id, group_id)
+
+    # 最終確認/拒絕指令（從 Flex 按鈕直接觸發）
+    final_confirm_match = re.match(r"最終確認\s*#?(\d+)", text)
+    if final_confirm_match:
+        staging_id = int(final_confirm_match.group(1))
+        sm.clear_state(group_id)
+        return await _do_final_archive(staging_id, group_id)
+
+    reject_match = re.match(r"拒絕\s*#?(\d+)", text)
+    if reject_match:
+        staging_id = int(reject_match.group(1))
+        sm.clear_state(group_id)
+        sm.update_purchase_staging(staging_id, status="discarded")
+        return f"❌ 記錄 #{staging_id} 已取消，不予理會"
+
+    # 重複跳過/另存指令（從 Flex 按鈕直接觸發）
+    dup_skip_match = re.match(r"重複跳過\s*#?(\d+)", text)
+    if dup_skip_match:
+        sm.clear_state(group_id)
+        return "已跳過，不重複存檔"
+
+    resave_match = re.match(r"另存\s*#?(\S+)", text)
+    if resave_match:
+        sm.clear_state(group_id)
+        return "📸 請重新傳送照片，將另存為新記錄。"
 
     # 3. 指令路由
     text_lower = text.strip()
@@ -103,6 +142,37 @@ async def handle_text(line_service, text: str, group_id: str,
     income_match = re.match(r"新增收入\s+(\d+[\d,.]*)\s*(.*)", text_lower)
     if income_match:
         return _add_income(income_match.group(1), income_match.group(2))
+
+    # 索引指令
+    if text_lower in ("索引", "報表索引"):
+        return await _generate_index()
+
+    if text_lower in ("年度索引",):
+        return await _generate_annual_index()
+
+    # === 薪資/人事管理 ===
+    if text_lower in ("薪資表", "建立薪資表"):
+        return await _handle_salary_template()
+
+    if text_lower in ("員工資料", "建立員工資料", "員工資料表"):
+        return await _handle_employee_template()
+
+    if text_lower in ("薪資表完成", "薪資完成"):
+        return await _handle_salary_import()
+
+    if text_lower in ("員工清單", "員工列表"):
+        return _handle_employee_list()
+
+    if text_lower in ("上傳契約", "傳契約"):
+        sm.set_state(group_id, "waiting_contract_photo", {})
+        return "📄 請傳送勞動契約照片或 PDF\nAI 將自動辨識員工資料\n回覆「取消」可取消"
+
+    # === 菜單表格 ===
+    if text_lower in ("菜單表格", "建立菜單", "菜單模板"):
+        return await _handle_menu_template()
+
+    if text_lower in ("菜單完成", "菜單表完成"):
+        return await _handle_menu_import()
 
     # 菜單
     if text_lower in ("菜單", "推薦菜單", "本月菜單"):
@@ -171,7 +241,7 @@ async def _do_archive(staging_id: int, staging: dict) -> str:
 # === 確認/修改/捨棄 ===
 
 async def _confirm_staging(staging_id: int, group_id: str) -> str:
-    """確認採購記錄 + GDrive 正式歸檔（重命名 + INDEX.csv）"""
+    """第一步確認：顯示最終確認 Flex（二次確認流程）"""
     staging = sm.get_staging(staging_id)
     if not staging:
         return f"找不到記錄 #{staging_id}"
@@ -188,6 +258,37 @@ async def _confirm_staging(staging_id: int, group_id: str) -> str:
             "請輸入經手人姓名（例如：王小美）："
         )
 
+    # 進入二次確認：設定 waiting_final_confirm 狀態
+    items = sm.get_purchase_items(staging_id)
+    sm.set_state(group_id, "waiting_final_confirm", {"staging_id": staging_id})
+
+    # 嘗試回覆 Flex，fallback 到文字
+    try:
+        from services.ocr_service import build_final_confirm_flex
+        flex = build_final_confirm_flex(staging_id, staging, items)
+        # 返回文字提示，由呼叫端判斷（Flex 需要 line_service，這裡先返回文字）
+    except Exception as e:
+        logger.warning(f"build_final_confirm_flex error: {e}")
+
+    return (
+        f"📋 最終確認 #{staging_id}\n"
+        f"供應商：{staging['supplier_name']}\n"
+        f"日期：{staging['purchase_date']}\n"
+        f"金額：${staging['total_amount']:,.0f}\n"
+        f"品項數：{len(items)} 項\n\n"
+        f"回覆「最終確認 #{staging_id}」確認歸檔\n"
+        f"回覆「拒絕 #{staging_id}」不予理會"
+    )
+
+
+async def _do_final_archive(staging_id: int, group_id: str) -> str:
+    """最終歸檔：實際執行確認 + 價格更新 + GDrive 歸檔"""
+    staging = sm.get_staging(staging_id)
+    if not staging:
+        return f"找不到記錄 #{staging_id}"
+    if staging["status"] != "pending":
+        return f"記錄 #{staging_id} 已是 {staging['status']} 狀態"
+
     sm.confirm_staging(staging_id)
 
     # 更新食材價格
@@ -200,7 +301,7 @@ async def _confirm_staging(staging_id: int, group_id: str) -> str:
     gdrive_note = await _do_archive(staging_id, staging)
 
     return (
-        f"✅ 記錄 #{staging_id} 已確認\n"
+        f"✅ 記錄 #{staging_id} 已確認歸檔\n"
         f"供應商：{staging['supplier_name']}\n"
         f"金額：${staging['total_amount']:,.0f}\n"
         f"歸屬月份：{staging['year_month']}"
@@ -236,12 +337,10 @@ def _start_edit(staging_id: int, group_id: str) -> str:
         lines.append(f"  {i}. {item['item_name']} {item['quantity']}{item['unit']} "
                      f"@${item['unit_price']:,.0f} = ${item['amount']:,.0f}")
     lines.append("")
-    lines.append("請輸入要修改的內容，格式：")
-    lines.append("  供應商=新名稱")
-    lines.append("  日期=2026-03-15")
-    lines.append("  總額=5000")
-    lines.append("  品項1=高麗菜 10kg @35 =350")
-    lines.append("或輸入「完成修改」結束")
+    lines.append("請直接說要改什麼，例如：")
+    lines.append("  「總額應該是3500」")
+    lines.append("  「花菜是3斤不是2斤」")
+    lines.append("  「供應商是全聯」")
 
     return "\n".join(lines)
 
@@ -265,7 +364,7 @@ async def _handle_confirm_response(text: str, group_id: str, state_data: dict) -
         return "請回覆「確認」或「捨棄」"
 
 
-_OCR_CONFIRM_WORDS = {"ok", "好", "對", "確認", "沒問題", "正確", "是", "yes", "可以", "👍"}
+_OCR_CONFIRM_WORDS = {"ok", "好", "對", "確認", "同意", "沒問題", "正確", "是", "yes", "可以", "👍"}
 _OCR_REJECT_WORDS = {"不對", "錯了", "修改", "不正確", "重來"}
 
 
@@ -300,9 +399,61 @@ async def _handle_ocr_confirm_response(text: str, group_id: str, state_data: dic
 
     # 不認識 → 提示（不清除狀態）
     return (f"📋 記錄 #{staging_id} 等待確認中\n"
-            "回覆「OK」或「好」確認\n"
-            "回覆「修改」進入修改模式\n"
-            "回覆「捨棄」丟棄此筆")
+            "回覆「同意」或「OK」確認\n"
+            "回覆「修改」進入修改模式")
+
+
+async def _handle_final_confirm_response(text: str, group_id: str, state_data: dict) -> str:
+    """處理最終確認狀態的回應"""
+    staging_id = state_data.get("staging_id")
+    if not staging_id:
+        sm.clear_state(group_id)
+        return "狀態異常，請重新操作"
+
+    normalized = text.strip()
+
+    # 最終確認 → 實際歸檔
+    if re.match(r"最終確認\s*#?\d*", normalized) or normalized.lower() in ("最終確認", "確認歸檔", "確認"):
+        sm.clear_state(group_id)
+        return await _do_final_archive(staging_id, group_id)
+
+    # 拒絕 → 標記 discarded
+    if re.match(r"拒絕\s*#?\d*", normalized) or normalized in ("拒絕", "不要", "取消", "不予理會"):
+        sm.clear_state(group_id)
+        sm.update_purchase_staging(staging_id, status="discarded")
+        return f"❌ 記錄 #{staging_id} 已取消，不予理會"
+
+    return (
+        f"📋 記錄 #{staging_id} 等待最終確認\n"
+        f"回覆「最終確認」確認歸檔\n"
+        f"回覆「拒絕」不予理會"
+    )
+
+
+async def _handle_duplicate_decision(line_service, text: str, group_id: str,
+                                      user_id: str, state_data: dict) -> str:
+    """處理重複圖片決策"""
+    normalized = text.strip()
+
+    # 重複跳過
+    if normalized.startswith("重複跳過") or normalized in ("跳過", "相同內容"):
+        sm.clear_state(group_id)
+        return "已跳過，不重複存檔"
+
+    # 另存新檔 → 重新觸發完整照片處理流程
+    if normalized.startswith("另存") or normalized in ("另存新檔", "新檔"):
+        message_id = state_data.get("message_id", "")
+        sm.clear_state(group_id)
+        return (
+            "📸 請重新傳送照片，將另存為新記錄。\n"
+            "（重新上傳一次即可）"
+        )
+
+    return (
+        "⚠️ 偵測到重複圖片\n"
+        "回覆「重複跳過」跳過不存\n"
+        "回覆「另存」另存新檔"
+    )
 
 
 def _handle_finance_search(text: str, group_id: str) -> str:
@@ -353,65 +504,293 @@ async def _handle_supplier_response(text: str, group_id: str, state_data: dict) 
 
 
 async def _handle_handler_response(text: str, group_id: str, state_data: dict) -> str:
-    """處理經手人姓名填寫"""
+    """處理經手人姓名填寫 → 進入二次確認"""
     staging_id = state_data.get("staging_id")
     handler_name = text.strip()
     if not handler_name:
         return "請輸入經手人姓名"
 
     sm.update_purchase_staging(staging_id, handler_name=handler_name)
-    sm.confirm_staging(staging_id)
     sm.clear_state(group_id)
 
+    # 進入二次確認流程
     staging = sm.get_staging(staging_id)
-
-    # GDrive 正式歸檔
-    gdrive_note = await _do_archive(staging_id, staging)
+    items = sm.get_purchase_items(staging_id)
+    sm.set_state(group_id, "waiting_final_confirm", {"staging_id": staging_id})
 
     return (
-        f"✅ 記錄 #{staging_id} 已確認\n"
-        f"經手人：{handler_name}\n"
-        f"金額：${staging['total_amount']:,.0f}"
-        f"{gdrive_note}"
+        f"✅ 經手人已設定：{handler_name}\n\n"
+        f"📋 最終確認 #{staging_id}\n"
+        f"供應商：{staging['supplier_name']}\n"
+        f"金額：${staging['total_amount']:,.0f}\n"
+        f"品項數：{len(items)} 項\n\n"
+        f"回覆「最終確認」確認歸檔\n"
+        f"回覆「拒絕」不予理會"
     )
 
 
 async def _handle_edit_response(text: str, group_id: str, state_data: dict) -> str:
-    """處理修改回應"""
+    """處理修改回應 — 用 LLM 智慧比對使用者自然語言修改意圖"""
     staging_id = state_data.get("staging_id")
 
-    if text.strip() in ("完成修改", "完成", "結束"):
+    # 同意 → 確認
+    if text.strip().lower() in ("同意", "ok", "好", "確認", "沒問題", "yes"):
         sm.clear_state(group_id)
-        staging = sm.get_staging(staging_id)
-        return (
-            f"✅ 修改完成。記錄 #{staging_id}\n"
-            f"總額：${staging['total_amount']:,.0f}\n"
-            f"請輸入「確認 #{staging_id}」來確認此筆記錄"
-        )
+        return await _confirm_staging(staging_id, group_id)
 
-    # 解析修改指令
-    if text.startswith("供應商="):
-        new_name = text[4:].strip()
-        sm.update_purchase_staging(staging_id, supplier_name=new_name)
-        return f"已修改供應商為「{new_name}」"
-    elif text.startswith("日期="):
-        new_date = text[3:].strip()
-        sm.update_purchase_staging(staging_id, purchase_date=new_date)
-        return f"已修改日期為 {new_date}"
-    elif text.startswith("總額="):
+    # 取得目前記錄
+    staging = sm.get_staging(staging_id)
+    if not staging:
+        sm.clear_state(group_id)
+        return "狀態異常，請重新操作"
+
+    items = sm.get_purchase_items(staging_id)
+
+    # 先嘗試本地正則解析（快速、無需 LLM）
+    changes = _parse_edit_local(text.strip())
+
+    # 本地解析失敗 → 用 LLM 智慧比對
+    if not changes:
+        changes = await _parse_edit_with_llm(staging, items, text.strip())
+
+    if changes is None:
+        return "我不太確定您要修改什麼，可以再說清楚一點嗎？"
+
+    # 套用修改
+    applied = []
+    for change in changes:
+        result = _apply_single_change(staging_id, staging, items, change)
+        if result:
+            applied.append(result)
+
+    if not applied:
+        return "我不太確定您要修改什麼，可以再說清楚一點嗎？"
+
+    # 重新讀取最新狀態
+    staging = sm.get_staging(staging_id)
+    items = sm.get_purchase_items(staging_id)
+
+    # 組裝回覆：顯示修改結果 + 最新摘要
+    lines = ["✅ 已修改："]
+    for a in applied:
+        lines.append(f"  • {a}")
+    lines.append("")
+    lines.append(f"📋 記錄 #{staging_id} 目前內容：")
+    lines.append(f"  供應商：{staging['supplier_name']}")
+    lines.append(f"  日期：{staging['purchase_date']}")
+    lines.append(f"  總額：${staging['total_amount']:,.0f}")
+    if items:
+        lines.append("  品項：")
+        for i, item in enumerate(items, 1):
+            lines.append(f"    {i}. {item['item_name']} {item['quantity']}{item['unit']} "
+                         f"= ${item['amount']:,.0f}")
+    lines.append("")
+    lines.append("回覆「同意」確認，或繼續說要改什麼")
+
+    return "\n".join(lines)
+
+
+def _parse_edit_local(user_input: str) -> list | None:
+    """本地正則解析 — 處理 key=value 格式和簡單模式，作為 LLM 前的快速 fallback"""
+    changes = []
+
+    # 相容舊格式：供應商=xxx, 日期=xxx, 總額=xxx
+    if user_input.startswith("供應商="):
+        new_val = user_input[4:].strip()
+        if new_val:
+            changes.append({"field": "supplier_name", "new": new_val})
+    elif user_input.startswith("日期="):
+        new_val = user_input[3:].strip()
+        if new_val:
+            changes.append({"field": "purchase_date", "new": new_val})
+    elif user_input.startswith("總額="):
+        new_val = user_input[3:].strip().replace(",", "")
         try:
-            new_total = float(text[3:].strip().replace(",", ""))
+            changes.append({"field": "total_amount", "new": float(new_val)})
+        except ValueError:
+            pass
+
+    # 簡單模式：「供應商是XXX」「日期改成XXX」「總額應該是XXX」
+    if not changes:
+        m = re.match(r"供應商[是改為]+\s*(.+)", user_input)
+        if m:
+            changes.append({"field": "supplier_name", "new": m.group(1).strip()})
+
+    if not changes:
+        m = re.match(r"日期[是改為]+\s*(.+)", user_input)
+        if m:
+            changes.append({"field": "purchase_date", "new": m.group(1).strip()})
+
+    if not changes:
+        m = re.match(r"總額[是應該改為]+\s*(\d[\d,.]*)", user_input)
+        if m:
+            try:
+                changes.append({"field": "total_amount", "new": float(m.group(1).replace(",", ""))})
+            except ValueError:
+                pass
+
+    return changes if changes else None
+
+
+async def _parse_edit_with_llm(staging: dict, items: list, user_input: str) -> list | None:
+    """用 LLM 解析使用者自然語言修改意圖，回傳 changes list 或 None"""
+    from services.llm_service import chat as llm_chat
+
+    # 組裝目前資料摘要
+    item_lines = []
+    for i, item in enumerate(items, 1):
+        item_lines.append(
+            f"  {i}. item_name={item['item_name']}, quantity={item['quantity']}, "
+            f"unit={item['unit']}, unit_price={item['unit_price']}, amount={item['amount']}"
+        )
+    items_text = "\n".join(item_lines) if item_lines else "  （無品項）"
+
+    prompt = (
+        f"以下是一筆採購 OCR 辨識結果：\n"
+        f"supplier_name={staging['supplier_name']}\n"
+        f"purchase_date={staging['purchase_date']}\n"
+        f"total_amount={staging['total_amount']}\n"
+        f"品項：\n{items_text}\n\n"
+        f"使用者說：「{user_input}」\n\n"
+        f"請判斷使用者想修改什麼。回傳純 JSON（不要 markdown），格式：\n"
+        f'{{"changes": [...]}}\n'
+        f"每個 change 物件可以是：\n"
+        f'  修改表頭：{{"field": "supplier_name"|"purchase_date"|"total_amount", "new": 新值}}\n'
+        f'  修改品項：{{"field": "item", "item_name": "原品名（模糊匹配即可）", '
+        f'"attribute": "item_name"|"quantity"|"unit"|"unit_price"|"amount", "new": 新值}}\n'
+        f"數字值請用數字型別，不要用字串。\n"
+        f"如果無法判斷，回傳 {{}}"
+    )
+
+    system = (
+        "你是採購記錄修改助手。只回傳 JSON，不要任何其他文字。"
+        "根據使用者的口語表達，對比 OCR 辨識結果，判斷要修改的欄位和新值。"
+        "使用者可能用口語（例如「花菜是150不是160」表示要把花菜的金額從160改成150）。"
+    )
+
+    result = llm_chat(prompt, system=system, max_tokens=500, timeout=20)
+    if not result:
+        logger.warning("LLM edit parse failed: no response")
+        return None
+
+    # 解析 JSON
+    try:
+        # 清理可能的 markdown 包裝
+        cleaned = result.strip()
+        if cleaned.startswith("```"):
+            cleaned = cleaned.split("\n", 1)[-1]  # remove first ``` line
+            if cleaned.endswith("```"):
+                cleaned = cleaned[:-3]
+            cleaned = cleaned.strip()
+
+        data = json.loads(cleaned)
+        changes = data.get("changes", [])
+        if not changes:
+            return None
+        return changes
+    except (json.JSONDecodeError, AttributeError) as e:
+        logger.warning(f"LLM edit parse JSON error: {e}, raw={result[:200]}")
+        return None
+
+
+def _apply_single_change(staging_id: int, staging: dict, items: list,
+                         change: dict) -> str | None:
+    """套用單一修改，回傳描述字串或 None"""
+    field = change.get("field", "")
+
+    # 表頭修改
+    if field == "supplier_name":
+        new_val = str(change.get("new", "")).strip()
+        if new_val:
+            sm.update_purchase_staging(staging_id, supplier_name=new_val)
+            return f"供應商 → {new_val}"
+
+    elif field == "purchase_date":
+        new_val = str(change.get("new", "")).strip()
+        if new_val:
+            sm.update_purchase_staging(staging_id, purchase_date=new_val)
+            return f"日期 → {new_val}"
+
+    elif field == "total_amount":
+        try:
+            new_total = float(change.get("new", 0))
             new_tax = round(new_total / 1.05 * 0.05)
             new_subtotal = new_total - new_tax
             sm.update_purchase_staging(staging_id,
                                        total_amount=new_total,
                                        subtotal=new_subtotal,
                                        tax_amount=new_tax)
-            return f"已修改總額為 ${new_total:,.0f}（未稅 ${new_subtotal:,.0f} + 稅 ${new_tax:,.0f}）"
-        except ValueError:
-            return "金額格式錯誤，請輸入數字"
+            return f"總額 → ${new_total:,.0f}"
+        except (ValueError, TypeError):
+            return None
 
-    return "格式不正確。請使用「供應商=名稱」、「日期=YYYY-MM-DD」、「總額=金額」或「完成修改」"
+    # 品項修改
+    elif field == "item":
+        target_name = str(change.get("item_name", "")).strip()
+        attribute = change.get("attribute", "")
+        new_val = change.get("new")
+
+        if not target_name or not attribute or new_val is None:
+            return None
+
+        # 模糊匹配品項
+        matched_item = _fuzzy_match_item(items, target_name)
+        if not matched_item:
+            return None
+
+        item_id = matched_item["id"]
+
+        # 套用品項級修改
+        update_kwargs = {}
+        desc = ""
+
+        if attribute == "item_name":
+            update_kwargs["item_name"] = str(new_val)
+            desc = f"{matched_item['item_name']} 品名 → {new_val}"
+        elif attribute == "quantity":
+            try:
+                update_kwargs["quantity"] = float(new_val)
+                desc = f"{matched_item['item_name']} 數量 → {new_val}"
+            except (ValueError, TypeError):
+                return None
+        elif attribute == "unit":
+            update_kwargs["unit"] = str(new_val)
+            desc = f"{matched_item['item_name']} 單位 → {new_val}"
+        elif attribute == "unit_price":
+            try:
+                update_kwargs["unit_price"] = float(new_val)
+                desc = f"{matched_item['item_name']} 單價 → ${float(new_val):,.0f}"
+            except (ValueError, TypeError):
+                return None
+        elif attribute == "amount":
+            try:
+                update_kwargs["amount"] = float(new_val)
+                desc = f"{matched_item['item_name']} 金額 → ${float(new_val):,.0f}"
+            except (ValueError, TypeError):
+                return None
+        else:
+            return None
+
+        if update_kwargs:
+            sm.update_purchase_item(item_id, **update_kwargs)
+            return desc
+
+    return None
+
+
+def _fuzzy_match_item(items: list, target_name: str) -> dict | None:
+    """模糊匹配品項名稱"""
+    target = target_name.strip().lower()
+    # 精確匹配
+    for item in items:
+        if item["item_name"].strip().lower() == target:
+            return item
+    # 包含匹配
+    for item in items:
+        name = item["item_name"].strip().lower()
+        if target in name or name in target:
+            return item
+    return None
 
 
 # === 匯出 ===
@@ -565,10 +944,317 @@ async def _show_item_price(item_name: str) -> str:
         return "行情模組尚未安裝"
 
 
+async def _generate_index() -> str:
+    """生成當月總覽索引"""
+    from datetime import datetime
+    ym = datetime.now().strftime("%Y-%m")
+    try:
+        from services.gdrive_service import update_master_index
+        csv_path = update_master_index(ym)
+        if csv_path:
+            # 計算檔案數
+            import csv as csv_module
+            count = 0
+            try:
+                with open(csv_path, "r", encoding="utf-8-sig") as f:
+                    reader = csv_module.DictReader(f)
+                    rows = list(reader)
+                    count = len(rows)
+                    # 統計各類別
+                    cats = {}
+                    for r in rows:
+                        cat = r.get("類別", "其他")
+                        cats[cat] = cats.get(cat, 0) + 1
+            except Exception:
+                pass
+
+            lines = [f"📑 {ym} 總覽索引已更新", f"共 {count} 個檔案", ""]
+            if cats:
+                for cat, cnt in sorted(cats.items()):
+                    lines.append(f"  📂 {cat}：{cnt} 個")
+            lines.append(f"\n📁 {csv_path}")
+            return "\n".join(lines)
+        else:
+            return f"⚠️ {ym} 無資料可索引"
+    except Exception as e:
+        logger.error(f"Generate index error: {e}", exc_info=True)
+        return f"索引生成失敗：{str(e)}"
+
+
+async def _generate_annual_index() -> str:
+    """生成年度總覽索引"""
+    from datetime import datetime
+    year = str(datetime.now().year)
+    try:
+        from services.gdrive_service import generate_annual_index
+        csv_path = generate_annual_index(year)
+        if csv_path:
+            import csv as csv_module
+            count = 0
+            try:
+                with open(csv_path, "r", encoding="utf-8-sig") as f:
+                    count = sum(1 for _ in csv_module.DictReader(f))
+            except Exception:
+                pass
+            return (
+                f"📑 {year} 年度總覽索引已更新\n"
+                f"共 {count} 個檔案\n"
+                f"📁 {csv_path}"
+            )
+        else:
+            return f"⚠️ {year} 年無資料可索引"
+    except Exception as e:
+        logger.error(f"Generate annual index error: {e}", exc_info=True)
+        return f"年度索引生成失敗：{str(e)}"
+
+
+# === 薪資/人事管理 handler ===
+
+async def _handle_salary_template() -> str:
+    """建立薪資表模板"""
+    from datetime import datetime
+    try:
+        from services.salary_service import generate_salary_template
+        ym = datetime.now().strftime("%Y-%m")
+        filepath = generate_salary_template(ym)
+        return (
+            f"✅ 薪資表模板已建立\n"
+            f"📅 月份：{ym}\n"
+            f"📁 路徑：{filepath}\n\n"
+            f"請到 Google Drive 開啟 Excel 檔案填寫\n"
+            f"填完後回覆「薪資表完成」匯入系統"
+        )
+    except Exception as e:
+        logger.error(f"Salary template error: {e}", exc_info=True)
+        return f"建立薪資表失敗：{str(e)}"
+
+
+async def _handle_employee_template() -> str:
+    """建立員工資料表模板"""
+    try:
+        from services.salary_service import generate_employee_template
+        filepath = generate_employee_template()
+        return (
+            f"✅ 員工資料表已建立\n"
+            f"📁 路徑：{filepath}\n\n"
+            f"請到 Google Drive 開啟 Excel 檔案填寫員工資料"
+        )
+    except Exception as e:
+        logger.error(f"Employee template error: {e}", exc_info=True)
+        return f"建立員工資料表失敗：{str(e)}"
+
+
+async def _handle_salary_import() -> str:
+    """匯入已填寫的薪資表"""
+    from datetime import datetime
+    try:
+        from services.salary_service import import_salary_from_sheet
+        from services.gdrive_service import GDRIVE_LOCAL
+
+        ym = datetime.now().strftime("%Y-%m")
+        parts = ym.split("-")
+        year = parts[0]
+        month = f"{int(parts[1]):02d}月"
+        filepath = os.path.join(GDRIVE_LOCAL, year, month, "薪資表", f"薪資表_{ym}.xlsx")
+
+        if not os.path.exists(filepath):
+            return (
+                f"找不到薪資表檔案\n"
+                f"預期路徑：{filepath}\n\n"
+                f"請先輸入「薪資表」建立模板，填寫後再回覆「薪資表完成」"
+            )
+
+        result = import_salary_from_sheet(filepath, ym)
+
+        lines = [f"📊 薪資表匯入完成 — {ym}", ""]
+        lines.append(f"✅ 匯入 {result['count']} 人")
+        if result['count'] > 0:
+            lines.append(f"💰 應發合計：${result['total_gross']:,.0f}")
+            lines.append(f"💵 實發合計：${result['total_net']:,.0f}")
+        if result['errors']:
+            lines.append("")
+            lines.append("⚠️ 錯誤：")
+            for err in result['errors']:
+                lines.append(f"  • {err}")
+
+        return "\n".join(lines)
+    except Exception as e:
+        logger.error(f"Salary import error: {e}", exc_info=True)
+        return f"匯入薪資表失敗：{str(e)}"
+
+
+def _handle_employee_list() -> str:
+    """列出所有在職員工"""
+    employees = sm.list_employees(status="active")
+    if not employees:
+        return (
+            "📭 尚未建立員工資料\n\n"
+            "建立方式：\n"
+            "  1. 輸入「員工資料」建立 Excel 模板\n"
+            "  2. 輸入「上傳契約」用 AI 辨識契約"
+        )
+
+    from services.salary_service import mask_id_number
+    lines = [f"👥 在職員工（{len(employees)} 人）", ""]
+    for emp in employees:
+        id_masked = mask_id_number(emp.get("id_number", ""))
+        salary = emp.get("base_salary", 0) or 0
+        lines.append(
+            f"  #{emp['id']} {emp['name']} | {emp.get('position', '-')} | "
+            f"底薪 ${salary:,} | {id_masked}"
+        )
+    return "\n".join(lines)
+
+
+async def handle_contract_upload(image_path: str, group_id: str) -> str:
+    """處理契約圖片上傳 — 解析 + 建檔 + 歸檔
+
+    Called from main.py _handle_image() when state is waiting_contract_photo.
+    """
+    sm.clear_state(group_id)
+
+    try:
+        from services.salary_service import (
+            parse_contract_image, create_employee_folder, archive_contract, mask_id_number
+        )
+
+        # 1. Gemini VLM 解析契約
+        result = parse_contract_image(image_path)
+        if not result or not result.get("name"):
+            return "❌ 無法辨識契約內容，請確認圖片清晰度\n可重新輸入「上傳契約」再試"
+
+        name = result.get("name", "").strip()
+        id_number = result.get("id_number", "")
+        position = result.get("position", "")
+        department = result.get("department", "")
+        base_salary = result.get("base_salary", 0)
+        hire_date = result.get("hire_date", "")
+
+        # 2. 建立員工記錄
+        emp_data = {"name": name, "status": "active"}
+        if id_number:
+            emp_data["id_number"] = id_number
+        if position:
+            emp_data["position"] = position
+        if department:
+            emp_data["department"] = department
+        if base_salary:
+            try:
+                emp_data["base_salary"] = int(float(base_salary))
+            except (ValueError, TypeError):
+                pass
+        if hire_date:
+            emp_data["hire_date"] = hire_date
+
+        emp_id = sm.add_employee(**emp_data)
+
+        # 3. 建立 GDrive 資料夾 + 歸檔契約
+        folder_path = create_employee_folder(name)
+        contract_path = archive_contract(image_path, name)
+        sm.update_employee(emp_id, contract_gdrive_path=contract_path)
+
+        # 4. 組裝回覆
+        id_masked = mask_id_number(id_number)
+        lines = ["✅ 契約辨識完成，已建立員工資料", ""]
+        lines.append(f"👤 姓名：{name}")
+        if id_masked:
+            lines.append(f"🆔 身分證：{id_masked}")
+        if position:
+            lines.append(f"💼 職稱：{position}")
+        if department:
+            lines.append(f"🏢 部門：{department}")
+        if base_salary:
+            lines.append(f"💰 底薪：${int(float(base_salary)):,}")
+        if hire_date:
+            lines.append(f"📅 到職日：{hire_date}")
+        lines.append("")
+        lines.append(f"📂 資料夾：{folder_path}")
+        lines.append(f"📄 契約：{contract_path}")
+
+        return "\n".join(lines)
+
+    except Exception as e:
+        logger.error(f"Contract upload error: {e}", exc_info=True)
+        return f"❌ 契約處理失敗：{str(e)}\n可重新輸入「上傳契約」再試"
+
+
+async def _handle_menu_template() -> str:
+    """建立菜單排程模板"""
+    from datetime import datetime
+    try:
+        from services.salary_service import generate_menu_template
+        ym = datetime.now().strftime("%Y-%m")
+        filepath = generate_menu_template(ym)
+        return (
+            f"✅ 菜單排程表已建立\n"
+            f"📅 月份：{ym}\n"
+            f"📁 路徑：{filepath}\n\n"
+            f"請到 Google Drive 開啟 Excel 填寫菜單\n"
+            f"填完後回覆「菜單完成」匯入系統"
+        )
+    except Exception as e:
+        logger.error(f"Menu template error: {e}", exc_info=True)
+        return f"建立菜單表格失敗：{str(e)}"
+
+
+async def _handle_menu_import() -> str:
+    """匯入已填寫的菜單表"""
+    from datetime import datetime
+    try:
+        from services.salary_service import parse_menu_excel
+        from services.gdrive_service import GDRIVE_LOCAL
+
+        ym = datetime.now().strftime("%Y-%m")
+        parts = ym.split("-")
+        year = parts[0]
+        month = f"{int(parts[1]):02d}月"
+        filepath = os.path.join(GDRIVE_LOCAL, year, month, "菜單企劃", f"菜單_{ym}.xlsx")
+
+        if not os.path.exists(filepath):
+            return (
+                f"找不到菜單檔案\n"
+                f"預期路徑：{filepath}\n\n"
+                f"請先輸入「菜單表格」建立模板，填寫後再回覆「菜單完成」"
+            )
+
+        records = parse_menu_excel(filepath)
+        if not records:
+            return "菜單表格是空的，請先填寫菜色後再匯入"
+
+        # Import to DB
+        imported = 0
+        for rec in records:
+            try:
+                sm.add_menu_schedule(
+                    schedule_date=rec["date"],
+                    slot=rec["slot"],
+                    meal_type=rec["meal_type"],
+                )
+                imported += 1
+            except Exception as e:
+                logger.warning(f"Menu import row error: {e}")
+
+        # Summary by date
+        dates = sorted(set(r["date"] for r in records))
+        lunch_count = sum(1 for r in records if r["meal_type"] == "lunch")
+        dinner_count = sum(1 for r in records if r["meal_type"] == "dinner")
+
+        return (
+            f"✅ 菜單匯入完成 — {ym}\n"
+            f"📅 涵蓋 {len(dates)} 天\n"
+            f"🍱 午餐菜色 {lunch_count} 道\n"
+            f"🍽️ 晚餐菜色 {dinner_count} 道\n"
+            f"📊 共 {len(records)} 筆記錄"
+        )
+    except Exception as e:
+        logger.error(f"Menu import error: {e}", exc_info=True)
+        return f"匯入菜單失敗：{str(e)}"
+
+
 def _show_help() -> str:
     """顯示使用說明"""
     return (
-        "🍳 小膳 Bot v2.0 使用說明\n"
+        "🍳 小膳 Bot v2.5 使用說明\n"
         "━━━━━━━━━━━━━━\n"
         "\n"
         "💡 點選下方「📋 小膳功能選單」\n"
@@ -593,6 +1279,17 @@ def _show_help() -> str:
         "\n"
         "📦 匯出\n"
         "  匯出 1-2月 → 營業稅資料\n"
+        "\n"
+        "👥 人事薪資\n"
+        "  薪資表 → 建立薪資表模板\n"
+        "  員工資料 → 建立員工資料表\n"
+        "  上傳契約 → AI 辨識勞動契約\n"
+        "  員工清單 → 查看在職員工\n"
+        "  薪資表完成 → 匯入薪資資料\n"
+        "\n"
+        "🍽️ 菜單\n"
+        "  菜單表格 → 建立菜單排程\n"
+        "  菜單完成 → 匯入菜單資料\n"
         "\n"
         "help → 顯示此說明"
     )

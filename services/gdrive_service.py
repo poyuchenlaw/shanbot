@@ -288,10 +288,10 @@ async def archive_receipt(
     ext = os.path.splitext(local_path)[1] or ".jpg"
     new_filename = f"{date_prefix}_{safe_supplier}_{amount_str}_#{staging_id}{ext}"
 
-    # 2. 計算目標路徑：{年}/{月}月/收據憑證/
+    # 2. 計算目標路徑：{年}/{月}月/收據憑證/{供應商}/
     year_month = purchase_date[:7] if purchase_date and len(purchase_date) >= 7 else datetime.now().strftime("%Y-%m")
     _, month_path = _year_month_path(year_month)
-    dest_dir = os.path.join(month_path, "收據憑證")
+    dest_dir = os.path.join(month_path, "收據憑證", safe_supplier)
     os.makedirs(dest_dir, exist_ok=True)
 
     dest_path = os.path.join(dest_dir, new_filename)
@@ -324,6 +324,12 @@ async def archive_receipt(
     except Exception as e:
         logger.warning(f"INDEX.csv update failed: {e}")
 
+    # 5. 更新月度總覽索引
+    try:
+        update_master_index(year_month)
+    except Exception as e:
+        logger.warning(f"Master index update failed: {e}")
+
     return {
         "gdrive_path": rel_path,
         "filename": new_filename,
@@ -348,6 +354,146 @@ def _append_index_csv(folder_path: str, row: dict):
         writer.writerow(row)
 
     logger.info(f"INDEX.csv updated: {csv_path} (+1 row)")
+
+
+def update_master_index(year_month: str | None = None) -> str:
+    """掃描月份所有子資料夾，生成 INDEX_總覽.csv
+
+    Args:
+        year_month: 如 '2026-03'，預設為本月
+
+    Returns:
+        INDEX_總覽.csv 的完整路徑
+    """
+    import csv
+
+    if not year_month:
+        year_month = datetime.now().strftime("%Y-%m")
+
+    _, month_path = _year_month_path(year_month)
+
+    if not os.path.isdir(month_path):
+        logger.warning(f"update_master_index: {month_path} not found")
+        return ""
+
+    csv_path = os.path.join(month_path, "INDEX_總覽.csv")
+    headers = ["類別", "子分類", "檔案名稱", "日期", "大小", "建立時間"]
+    rows = []
+
+    for folder in MONTHLY_FOLDERS:
+        folder_path = os.path.join(month_path, folder)
+        if not os.path.isdir(folder_path):
+            continue
+
+        # 掃描子資料夾（供應商等）和直接的檔案
+        for root, dirs, files in os.walk(folder_path):
+            for fname in sorted(files):
+                if fname == "INDEX.csv" or fname == "INDEX_總覽.csv":
+                    continue
+                fp = os.path.join(root, fname)
+                rel_to_category = os.path.relpath(root, folder_path)
+                subcategory = rel_to_category if rel_to_category != "." else ""
+
+                try:
+                    stat = os.stat(fp)
+                    size_kb = f"{stat.st_size / 1024:.1f}KB"
+                    ctime = datetime.fromtimestamp(stat.st_ctime).strftime("%Y-%m-%d %H:%M")
+                    # 嘗試從檔名解析日期
+                    date_match = re.match(r"(\d{6})_", fname)
+                    file_date = ""
+                    if date_match:
+                        d = date_match.group(1)
+                        file_date = f"20{d[:2]}-{d[2:4]}-{d[4:6]}"
+                except Exception:
+                    size_kb = "?"
+                    ctime = "?"
+                    file_date = ""
+
+                rows.append({
+                    "類別": folder,
+                    "子分類": subcategory,
+                    "檔案名稱": fname,
+                    "日期": file_date,
+                    "大小": size_kb,
+                    "建立時間": ctime,
+                })
+
+    with open(csv_path, "w", newline="", encoding="utf-8-sig") as f:
+        writer = csv.DictWriter(f, fieldnames=headers)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(row)
+
+    logger.info(f"Master index updated: {csv_path} ({len(rows)} files)")
+    return csv_path
+
+
+def generate_annual_index(year: str | None = None) -> str:
+    """彙整全年各月 INDEX_總覽，生成 INDEX_年度總覽.csv
+
+    Args:
+        year: 如 '2026'，預設為今年
+
+    Returns:
+        INDEX_年度總覽.csv 的完整路徑
+    """
+    import csv
+
+    if not year:
+        year = str(datetime.now().year)
+
+    year_path = os.path.join(GDRIVE_LOCAL, year)
+    if not os.path.isdir(year_path):
+        logger.warning(f"generate_annual_index: {year_path} not found")
+        return ""
+
+    csv_path = os.path.join(year_path, "INDEX_年度總覽.csv")
+    headers = ["月份", "類別", "子分類", "檔案名稱", "日期", "大小", "建立時間"]
+    rows = []
+
+    # 掃描所有月份資料夾
+    for entry in sorted(os.listdir(year_path)):
+        if not entry.endswith("月"):
+            continue
+        month_path = os.path.join(year_path, entry)
+        if not os.path.isdir(month_path):
+            continue
+
+        # 先嘗試更新該月的 master index
+        month_num = entry.replace("月", "").zfill(2)
+        ym = f"{year}-{month_num}"
+        try:
+            update_master_index(ym)
+        except Exception:
+            pass
+
+        # 讀取月度 INDEX_總覽.csv
+        monthly_csv = os.path.join(month_path, "INDEX_總覽.csv")
+        if os.path.exists(monthly_csv):
+            try:
+                with open(monthly_csv, "r", encoding="utf-8-sig") as f:
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        rows.append({
+                            "月份": entry,
+                            "類別": row.get("類別", ""),
+                            "子分類": row.get("子分類", ""),
+                            "檔案名稱": row.get("檔案名稱", ""),
+                            "日期": row.get("日期", ""),
+                            "大小": row.get("大小", ""),
+                            "建立時間": row.get("建立時間", ""),
+                        })
+            except Exception as e:
+                logger.warning(f"Read monthly index failed for {entry}: {e}")
+
+    with open(csv_path, "w", newline="", encoding="utf-8-sig") as f:
+        writer = csv.DictWriter(f, fieldnames=headers)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(row)
+
+    logger.info(f"Annual index generated: {csv_path} ({len(rows)} files)")
+    return csv_path
 
 
 def get_folder_index(year_month: str | None = None) -> dict:

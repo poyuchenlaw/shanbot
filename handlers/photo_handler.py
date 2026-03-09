@@ -26,6 +26,47 @@ async def handle_photo_received(
 
     # 2. SHA256 校驗 + 儲存
     sha256 = hashlib.sha256(image_bytes).hexdigest()[:16]
+
+    # 2.1 重複上傳偵測
+    existing = sm.find_by_hash(sha256)
+    if existing:
+        logger.info(f"Duplicate image detected: hash={sha256}, existing=#{existing['id']}")
+        # 建立重複提示 Flex Message
+        dup_flex = _build_duplicate_flex(existing, message_id)
+        try:
+            success = line_service.reply_flex(
+                reply_token,
+                "⚠️ 重複圖片偵測",
+                dup_flex,
+            )
+            if success:
+                sm.set_state(group_id, "waiting_duplicate_decision", {
+                    "message_id": message_id,
+                    "old_staging_id": existing["id"],
+                    "image_hash": sha256,
+                })
+                return None  # 已用 Flex 回覆
+        except Exception as e:
+            logger.warning(f"Duplicate flex reply failed: {e}")
+
+        # Flex 失敗 fallback 到文字
+        sm.set_state(group_id, "waiting_duplicate_decision", {
+            "message_id": message_id,
+            "old_staging_id": existing["id"],
+            "image_hash": sha256,
+        })
+        status_label = {"pending": "待確認", "confirmed": "已確認",
+                        "exported": "已匯出"}.get(existing["status"], existing["status"])
+        return (
+            f"⚠️ 這張圖片之前上傳過了\n"
+            f"上次上傳：{existing['created_at']}\n"
+            f"供應商：{existing['supplier_name'] or '未知'}\n"
+            f"金額：${existing['total_amount']:,.0f}\n"
+            f"狀態：{status_label}\n\n"
+            f"回覆「重複跳過」跳過不存\n"
+            f"回覆「另存」另存新檔"
+        )
+
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"{timestamp}_{sha256}.jpg"
     os.makedirs(FILES_DIR, exist_ok=True)
@@ -55,7 +96,10 @@ async def handle_photo_received(
         purchase_date=date.today().isoformat(),
     )
 
-    # 3.5 更新 GDrive 路徑
+    # 3.5 儲存圖片 hash
+    sm.update_staging_hash(staging_id, sha256)
+
+    # 3.6 更新 GDrive 路徑
     if gdrive_path:
         sm.update_purchase_staging(staging_id, gdrive_path=gdrive_path)
 
@@ -241,6 +285,51 @@ def _build_text_summary(result, staging_id: int, status_label: str) -> str:
     ])
 
     return "\n".join(lines)
+
+
+def _build_duplicate_flex(existing: dict, message_id: str) -> dict:
+    """建立重複圖片偵測 Flex Message"""
+    status_label = {"pending": "待確認", "confirmed": "已確認",
+                    "exported": "已匯出"}.get(existing["status"], existing["status"])
+    return {
+        "type": "bubble",
+        "size": "kilo",
+        "header": {
+            "type": "box",
+            "layout": "vertical",
+            "contents": [
+                {"type": "text", "text": "⚠️ 這張圖片之前上傳過了",
+                 "weight": "bold", "size": "md", "color": "#FF6D00"},
+            ],
+        },
+        "body": {
+            "type": "box",
+            "layout": "vertical",
+            "contents": [
+                {"type": "text", "text": f"上次上傳：{existing['created_at']}",
+                 "size": "sm", "color": "#666666"},
+                {"type": "text", "text": f"供應商：{existing['supplier_name'] or '未知'}",
+                 "size": "sm", "color": "#666666"},
+                {"type": "text", "text": f"金額：${existing['total_amount']:,.0f}",
+                 "size": "sm", "color": "#666666"},
+                {"type": "text", "text": f"狀態：{status_label}",
+                 "size": "sm", "color": "#666666"},
+            ],
+        },
+        "footer": {
+            "type": "box",
+            "layout": "horizontal",
+            "spacing": "sm",
+            "contents": [
+                {"type": "button", "style": "secondary",
+                 "action": {"type": "message", "label": "📋 相同內容",
+                           "text": f"重複跳過 #{existing['id']}"}},
+                {"type": "button", "style": "primary", "color": "#00C853",
+                 "action": {"type": "message", "label": "📁 另存新檔",
+                           "text": f"另存 #{message_id}"}},
+            ],
+        },
+    }
 
 
 def _classify_tax_deduction(ocr_result: dict) -> dict:

@@ -61,11 +61,11 @@ class TestCameraMenu(unittest.TestCase):
 
     def test_card3_has_camera_buttons(self):
         card = self.result["contents"][2]
-        # Find camera and cameraRoll URI actions
+        # Camera buttons now use postback actions (mode=camera / mode=album)
         actions = _collect_actions(card)
-        uris = [a.get("uri", "") for a in actions if a.get("type") == "uri"]
-        self.assertTrue(any("camera" in u for u in uris))
-        self.assertTrue(any("cameraRoll" in u for u in uris))
+        postback_data = [a.get("data", "") for a in actions if a.get("type") == "postback"]
+        self.assertTrue(any("camera" in d for d in postback_data))
+        self.assertTrue(any("album" in d for d in postback_data))
 
     def test_tips_card_has_five_tips(self):
         card = self.result["contents"][0]

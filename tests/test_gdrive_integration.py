@@ -13,17 +13,22 @@ TEST_GDRIVE = tempfile.mkdtemp(prefix="shanbot_gdrive_test_")
 
 
 @pytest.fixture(autouse=True)
-def mock_gdrive(monkeypatch):
-    """將 GDRIVE_LOCAL 指向暫存目錄"""
+def mock_gdrive(monkeypatch, tmp_path):
+    """將 GDRIVE_LOCAL 指向每個測試獨立的暫存目錄"""
+    global TEST_GDRIVE
     import services.gdrive_service as gs
     import services.gdrive_index_service as gis
 
-    monkeypatch.setattr(gs, "GDRIVE_LOCAL", TEST_GDRIVE)
-    monkeypatch.setattr(gis, "GDRIVE_LOCAL", TEST_GDRIVE)
-    monkeypatch.setattr(gis, "INDEX_FILE", os.path.join(TEST_GDRIVE, "索引.json"))
+    test_dir = str(tmp_path / "gdrive")
+    os.makedirs(test_dir, exist_ok=True)
+    TEST_GDRIVE = test_dir
+
+    monkeypatch.setattr(gs, "GDRIVE_LOCAL", test_dir)
+    monkeypatch.setattr(gis, "GDRIVE_LOCAL", test_dir)
+    monkeypatch.setattr(gis, "INDEX_FILE", os.path.join(test_dir, "索引.json"))
+    # Prevent init_folder_structure from overriding GDRIVE_LOCAL via _resolve_gdrive_path
+    monkeypatch.setattr(gs, "_resolve_gdrive_path", lambda: test_dir)
     yield
-    # 清理
-    shutil.rmtree(TEST_GDRIVE, ignore_errors=True)
 
 
 def run(coro):
