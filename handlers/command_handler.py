@@ -61,13 +61,16 @@ async def handle_text(line_service, text: str, group_id: str,
     if state == "waiting_final_confirm":
         return await _handle_final_confirm_response(text, group_id, state_data)
 
+    if state == "waiting_archive_info":
+        return await _handle_archive_info_response(text, group_id, state_data)
+
     # 2. 確認/修改/捨棄指令
     confirm_match = re.match(r"確認\s*#?(\d+)", text)
     if confirm_match:
         staging_id = int(confirm_match.group(1))
         return await _confirm_staging(staging_id, group_id)
 
-    discard_match = re.match(r"捨棄\s*#?(\d+)", text)
+    discard_match = re.match(r"(?:捨棄|放棄)\s*#?(\d+)", text)
     if discard_match:
         staging_id = int(discard_match.group(1))
         return _discard_staging(staging_id)
@@ -282,13 +285,51 @@ async def _confirm_staging(staging_id: int, group_id: str) -> str:
 
 
 async def _do_final_archive(staging_id: int, group_id: str) -> str:
-    """最終歸檔：實際執行確認 + 價格更新 + GDrive 歸檔"""
+    """最終歸檔：實際執行確認 + 價格更新 + GDrive 歸檔
+    若關鍵歸檔資訊不完整，先發問確認再歸檔。
+    """
     staging = sm.get_staging(staging_id)
     if not staging:
         return f"找不到記錄 #{staging_id}"
     if staging["status"] != "pending":
         return f"記錄 #{staging_id} 已是 {staging['status']} 狀態"
 
+    # === 歸檔前檢查：資訊不完整就發問 ===
+    missing = []
+    supplier = staging.get("supplier_name") or ""
+    purchase_date = staging.get("purchase_date") or ""
+    total = staging.get("total_amount") or 0
+    year_month = staging.get("year_month") or ""
+
+    if not supplier or supplier in ("unknown", "未知", ""):
+        missing.append("供應商名稱")
+    if not purchase_date or purchase_date == "未知":
+        missing.append("採購日期")
+    if not total or total == 0:
+        missing.append("金額")
+
+    if missing:
+        sm.set_state(group_id, "waiting_archive_info", {
+            "staging_id": staging_id,
+            "missing_fields": missing,
+        })
+        fields_str = "、".join(missing)
+        return (
+            f"⚠️ 歸檔資訊不完整，需要補充以下資訊：\n"
+            f"缺少：{fields_str}\n\n"
+            f"請直接輸入，例如：\n"
+            + ("  供應商：XX行\n" if "供應商名稱" in missing else "")
+            + ("  日期：2026-03-09\n" if "採購日期" in missing else "")
+            + ("  金額：3500\n" if "金額" in missing else "")
+            + f"\n或回覆「放棄」取消歸檔"
+        )
+
+    # === 資訊完整，正式歸檔 ===
+    return await _execute_archive(staging_id, staging, group_id)
+
+
+async def _execute_archive(staging_id: int, staging: dict, group_id: str) -> str:
+    """實際執行歸檔（資訊已完整時呼叫）"""
     sm.confirm_staging(staging_id)
 
     # 更新食材價格
@@ -300,6 +341,7 @@ async def _do_final_archive(staging_id: int, group_id: str) -> str:
     # GDrive 正式歸檔
     gdrive_note = await _do_archive(staging_id, staging)
 
+    sm.clear_state(group_id)
     return (
         f"✅ 記錄 #{staging_id} 已確認歸檔\n"
         f"供應商：{staging['supplier_name']}\n"
@@ -392,15 +434,112 @@ async def _handle_ocr_confirm_response(text: str, group_id: str, state_data: dic
         sm.clear_state(group_id)
         return _start_edit(staging_id, group_id)
 
-    # 捨棄
-    if normalized in ("捨棄", "丟掉", "不要") or re.match(r"捨棄\s*#?\d+", normalized):
+    # 放棄/捨棄
+    if normalized in ("捨棄", "放棄", "丟掉", "不要") or re.match(r"(?:捨棄|放棄)\s*#?\d+", normalized):
         sm.clear_state(group_id)
         return _discard_staging(staging_id)
 
     # 不認識 → 提示（不清除狀態）
     return (f"📋 記錄 #{staging_id} 等待確認中\n"
-            "回覆「同意」或「OK」確認\n"
-            "回覆「修改」進入修改模式")
+            "回覆「正確」或「OK」確認\n"
+            "回覆「修改」進入修改模式\n"
+            "回覆「放棄」捨棄此筆")
+
+
+async def _handle_archive_info_response(text: str, group_id: str, state_data: dict) -> str:
+    """處理歸檔資訊補充回應（供應商/日期/金額缺失時發問）"""
+    staging_id = state_data.get("staging_id")
+    if not staging_id:
+        sm.clear_state(group_id)
+        return "找不到對應的記錄"
+
+    normalized = text.strip()
+
+    # 放棄
+    if normalized in ("放棄", "取消", "算了"):
+        sm.clear_state(group_id)
+        return _discard_staging(staging_id)
+
+    staging = sm.get_staging(staging_id)
+    if not staging:
+        sm.clear_state(group_id)
+        return f"找不到記錄 #{staging_id}"
+
+    missing = state_data.get("missing_fields", [])
+    updated = {}
+
+    # 嘗試解析使用者輸入的補充資訊
+    for line in normalized.replace("，", "\n").replace(",", "\n").split("\n"):
+        line = line.strip()
+        if not line:
+            continue
+
+        # 供應商
+        sup_m = re.match(r"(?:供應商|廠商|店家)[：:=]?\s*(.+)", line)
+        if sup_m:
+            updated["supplier_name"] = sup_m.group(1).strip()
+            continue
+
+        # 日期
+        date_m = re.match(r"(?:日期|時間)[：:=]?\s*(\d{4}[-/]\d{1,2}[-/]\d{1,2})", line)
+        if date_m:
+            updated["purchase_date"] = date_m.group(1).replace("/", "-")
+            d = updated["purchase_date"]
+            updated["year_month"] = d[:7]
+            continue
+
+        # 金額
+        amt_m = re.match(r"(?:金額|總額|合計)[：:=]?\s*\$?(\d[\d,]*)", line)
+        if amt_m:
+            updated["total_amount"] = int(amt_m.group(1).replace(",", ""))
+            continue
+
+        # 如果只輸入一項且只缺一項，直接對應
+        if len(missing) == 1:
+            if "供應商名稱" in missing:
+                updated["supplier_name"] = line
+            elif "採購日期" in missing:
+                date_try = re.match(r"(\d{4}[-/]\d{1,2}[-/]\d{1,2})", line)
+                if date_try:
+                    updated["purchase_date"] = date_try.group(1).replace("/", "-")
+                    updated["year_month"] = updated["purchase_date"][:7]
+            elif "金額" in missing:
+                amt_try = re.match(r"\$?(\d[\d,]*)", line)
+                if amt_try:
+                    updated["total_amount"] = int(amt_try.group(1).replace(",", ""))
+
+    if not updated:
+        fields_str = "、".join(missing)
+        return (
+            f"我沒有辨識到有效的補充資訊\n"
+            f"仍然缺少：{fields_str}\n"
+            f"請輸入，例如：供應商：XX行\n"
+            f"或回覆「放棄」取消歸檔"
+        )
+
+    # 套用更新
+    sm.update_purchase_staging(staging_id, **updated)
+    staging = sm.get_staging(staging_id)  # reload
+
+    # 重新檢查是否還有缺少
+    still_missing = []
+    if not (staging.get("supplier_name") or "") or staging["supplier_name"] in ("unknown", "未知"):
+        still_missing.append("供應商名稱")
+    if not (staging.get("purchase_date") or "") or staging["purchase_date"] == "未知":
+        still_missing.append("採購日期")
+    if not staging.get("total_amount"):
+        still_missing.append("金額")
+
+    if still_missing:
+        sm.set_state(group_id, "waiting_archive_info", {
+            "staging_id": staging_id,
+            "missing_fields": still_missing,
+        })
+        fields_str = "、".join(still_missing)
+        return f"👍 已更新！但還缺少：{fields_str}\n請繼續補充，或回覆「放棄」取消"
+
+    # 全部補齊 → 正式歸檔
+    return await _execute_archive(staging_id, staging, group_id)
 
 
 async def _handle_final_confirm_response(text: str, group_id: str, state_data: dict) -> str:
@@ -1264,7 +1403,7 @@ def _show_help() -> str:
         "  直接拍照上傳收據/對帳單\n"
         "\n"
         "📋 採購管理\n"
-        "  確認 #1 / 修改 #1 / 捨棄 #1\n"
+        "  確認 #1 / 修改 #1 / 放棄 #1\n"
         "  待處理 → 待確認記錄\n"
         "\n"
         "📊 統計查詢\n"

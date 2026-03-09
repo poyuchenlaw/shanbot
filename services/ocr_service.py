@@ -691,17 +691,20 @@ def build_review_flex(result: OcrResult, staging_id: int) -> dict:
              "text": "以下品項請特別確認：\n" + "\n".join(q_lines),
              "size": "xs", "color": "#DD2E44", "wrap": True, "margin": "md"})
 
-    # 操作按鈕（同意 + 修改）
+    # 操作按鈕（正確 + 修改 + 放棄）
     flex["footer"]["contents"].extend([
         {
             "type": "box", "layout": "horizontal", "margin": "md", "spacing": "sm",
             "contents": [
                 {"type": "button", "style": "primary", "color": "#00C853",
-                 "action": {"type": "message", "label": "✅ 同意",
+                 "action": {"type": "message", "label": "✅ 正確",
                            "text": f"確認 #{staging_id}"}},
                 {"type": "button", "style": "secondary",
                  "action": {"type": "message", "label": "✏️ 修改",
                            "text": f"修改 #{staging_id}"}},
+                {"type": "button", "style": "secondary", "color": "#FF4444",
+                 "action": {"type": "message", "label": "❌ 放棄",
+                           "text": f"放棄 #{staging_id}"}},
             ],
         },
     ])

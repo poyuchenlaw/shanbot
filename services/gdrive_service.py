@@ -169,6 +169,44 @@ def init_folder_structure(year_month: str | None = None) -> str:
     for folder in ANNUAL_FOLDERS:
         os.makedirs(os.path.join(year_path, folder), exist_ok=True)
 
+    # 放置命名規則說明檔（讓使用者在資料夾裡就能看到命名邏輯）
+    readme_path = os.path.join(month_path, "命名規則說明.txt")
+    if not os.path.exists(readme_path):
+        try:
+            with open(readme_path, "w", encoding="utf-8") as f:
+                f.write(
+                    "【小膳系統 — 檔案命名規則說明】\n"
+                    "================================\n\n"
+                    "📁 資料夾結構：\n"
+                    "  {年}/{月}月/\n"
+                    "    ├── 收據憑證/{供應商名稱}/    ← 按供應商分類\n"
+                    "    ├── 採購單據/\n"
+                    "    ├── 月報表/\n"
+                    "    ├── 稅務匯出/\n"
+                    "    ├── 菜單企劃/\n"
+                    "    ├── 薪資表/\n"
+                    "    ├── 租約與合約/\n"
+                    "    ├── 會計資料/\n"
+                    "    ├── 財務報表/\n"
+                    "    └── INDEX_總覽.csv          ← 全月檔案索引\n\n"
+                    "📄 收據/憑證檔名格式：\n"
+                    "  YYMMDD_供應商名稱_金額_#流水號.jpg\n"
+                    "  例：260309_好鮮水產行_3500_#42.jpg\n\n"
+                    "📊 薪資表檔名格式：\n"
+                    "  薪資表_YYYY-MM.xlsx\n\n"
+                    "📋 菜單檔名格式：\n"
+                    "  菜單_YYYY-MM.xlsx\n\n"
+                    "📑 報表檔名格式：\n"
+                    "  {報表類型}_{YYYY-MM}.xlsx\n\n"
+                    "🔍 INDEX_總覽.csv 包含本月所有歸檔檔案的索引\n"
+                    "🔍 年度索引在 {年}/INDEX_年度總覽.csv\n\n"
+                    "💡 如需修改歸檔位置，直接在資料夾中移動檔案即可\n"
+                    "   系統不會自動移回，但 INDEX 不會自動更新\n"
+                    "   可在 LINE 輸入「索引」重新產生索引\n"
+                )
+        except Exception as e:
+            logger.warning(f"Failed to create naming readme: {e}")
+
     logger.info(f"Folder structure initialized: {month_path}")
     return month_path
 
