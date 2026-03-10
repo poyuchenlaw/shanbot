@@ -1,4 +1,4 @@
-"""小膳 Bot - SQLite 狀態管理器（12 表 + WAL mode）"""
+"""小膳 Bot - SQLite 狀態管理器（19 表 + WAL mode + 複式簿記）"""
 
 import json
 import sqlite3
@@ -283,6 +283,34 @@ CREATE TABLE IF NOT EXISTS payroll (
     status TEXT DEFAULT 'draft',
     created_at TEXT DEFAULT (datetime('now','localtime'))
 );
+
+-- 18. 分錄（日記帳 / Journal Entries）— 複式簿記核心
+CREATE TABLE IF NOT EXISTS journal_entries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    entry_date TEXT NOT NULL,
+    year_month TEXT NOT NULL,
+    source_type TEXT NOT NULL DEFAULT 'purchase',
+    source_id INTEGER,
+    description TEXT DEFAULT '',
+    account_code TEXT NOT NULL,
+    account_name TEXT DEFAULT '',
+    debit REAL DEFAULT 0,
+    credit REAL DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now','localtime'))
+);
+
+-- 19. 月度會計總表（每月損益摘要）
+CREATE TABLE IF NOT EXISTS monthly_accounting (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    year_month TEXT UNIQUE NOT NULL,
+    total_income REAL DEFAULT 0,
+    total_expense REAL DEFAULT 0,
+    total_tax REAL DEFAULT 0,
+    net_profit REAL DEFAULT 0,
+    journal_count INTEGER DEFAULT 0,
+    excel_path TEXT,
+    updated_at TEXT DEFAULT (datetime('now','localtime'))
+);
 """
 
 _SEED_ACCOUNT_MAPPING = """
@@ -301,7 +329,13 @@ INSERT OR IGNORE INTO account_mapping (category, account_code, account_name, par
 ('租金', '6120', '租金支出', '6100'),
 ('設備', '6230', '折舊', '6100'),
 ('運費', '6150', '運費', '6100'),
-('保險', '6190', '保險費', '6100');
+('保險', '6190', '保險費', '6100'),
+('現金', '1100', '現金及約當現金', '1000'),
+('應付帳款', '2100', '應付帳款', '2000'),
+('進項稅額', '1150', '進項稅額', '1000'),
+('銷項稅額', '2150', '銷項稅額', '2000'),
+('營業收入', '4100', '營業收入', '4000'),
+('薪資', '6110', '薪資支出', '6100');
 """
 
 
@@ -974,7 +1008,7 @@ def get_table_counts() -> dict:
         "price_history", "recipes", "recipe_ingredients", "menu_schedule",
         "monthly_cost", "config", "tax_exports", "account_mapping",
         "conversation_state", "income", "financial_documents",
-        "employees", "payroll",
+        "employees", "payroll", "journal_entries", "monthly_accounting",
     ]
     conn = _get_conn()
     counts = {}
@@ -1197,3 +1231,142 @@ def get_payroll(year_month: str, employee_id: int = None) -> list[dict]:
 def list_payroll(year_month: str) -> list[dict]:
     """列出指定月份所有薪資記錄"""
     return get_payroll(year_month)
+
+
+# === 分錄 / Journal Entries（複式簿記）===
+
+def add_journal_entry(entry_date: str, year_month: str, source_type: str,
+                      source_id: int, description: str,
+                      account_code: str, account_name: str,
+                      debit: float = 0, credit: float = 0) -> int:
+    """新增一筆分錄"""
+    conn = _get_conn()
+    cur = conn.execute(
+        "INSERT INTO journal_entries "
+        "(entry_date, year_month, source_type, source_id, description, "
+        "account_code, account_name, debit, credit) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (entry_date, year_month, source_type, source_id,
+         description, account_code, account_name, debit, credit),
+    )
+    conn.commit()
+    entry_id = cur.lastrowid
+    conn.close()
+    return entry_id
+
+
+def get_journal_entries(year_month: str, source_type: str = None) -> list[dict]:
+    """取得指定月份的分錄"""
+    conn = _get_conn()
+    if source_type:
+        rows = conn.execute(
+            "SELECT * FROM journal_entries WHERE year_month=? AND source_type=? "
+            "ORDER BY entry_date, id",
+            (year_month, source_type),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM journal_entries WHERE year_month=? ORDER BY entry_date, id",
+            (year_month,),
+        ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_journal_entries_by_source(source_type: str, source_id: int) -> list[dict]:
+    """取得特定來源的分錄"""
+    conn = _get_conn()
+    rows = conn.execute(
+        "SELECT * FROM journal_entries WHERE source_type=? AND source_id=? ORDER BY id",
+        (source_type, source_id),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def delete_journal_entries_by_source(source_type: str, source_id: int):
+    """刪除特定來源的分錄（重新生成前清除用）"""
+    conn = _get_conn()
+    conn.execute(
+        "DELETE FROM journal_entries WHERE source_type=? AND source_id=?",
+        (source_type, source_id),
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_trial_balance(year_month: str) -> list[dict]:
+    """取得試算表（各科目借貸合計）"""
+    conn = _get_conn()
+    rows = conn.execute(
+        "SELECT account_code, account_name, "
+        "SUM(debit) as total_debit, SUM(credit) as total_credit, "
+        "SUM(debit) - SUM(credit) as balance "
+        "FROM journal_entries WHERE year_month=? "
+        "GROUP BY account_code, account_name "
+        "ORDER BY account_code",
+        (year_month,),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_journal_summary(year_month: str) -> dict:
+    """取得月度分錄摘要"""
+    conn = _get_conn()
+    row = conn.execute(
+        "SELECT COUNT(*) as count, "
+        "SUM(debit) as total_debit, SUM(credit) as total_credit "
+        "FROM journal_entries WHERE year_month=?",
+        (year_month,),
+    ).fetchone()
+    conn.close()
+    if row:
+        return {
+            "count": row["count"] or 0,
+            "total_debit": row["total_debit"] or 0,
+            "total_credit": row["total_credit"] or 0,
+            "balanced": abs((row["total_debit"] or 0) - (row["total_credit"] or 0)) < 0.01,
+        }
+    return {"count": 0, "total_debit": 0, "total_credit": 0, "balanced": True}
+
+
+def upsert_monthly_accounting(year_month: str, **kwargs) -> int:
+    """新增或更新月度會計總表"""
+    conn = _get_conn()
+    existing = conn.execute(
+        "SELECT id FROM monthly_accounting WHERE year_month=?", (year_month,)
+    ).fetchone()
+    if existing:
+        sets = []
+        vals = []
+        for k, v in kwargs.items():
+            sets.append(f"{k}=?")
+            vals.append(v)
+        sets.append("updated_at=datetime('now','localtime')")
+        vals.append(existing["id"])
+        conn.execute(f"UPDATE monthly_accounting SET {', '.join(sets)} WHERE id=?", vals)
+        conn.commit()
+        conn.close()
+        return existing["id"]
+    else:
+        cols = ["year_month"] + list(kwargs.keys())
+        vals = [year_month] + list(kwargs.values())
+        placeholders = ", ".join(["?"] * len(cols))
+        cur = conn.execute(
+            f"INSERT INTO monthly_accounting ({', '.join(cols)}) VALUES ({placeholders})", vals
+        )
+        conn.commit()
+        mid = cur.lastrowid
+        conn.close()
+        return mid
+
+
+def get_monthly_accounting(year_month: str) -> Optional[dict]:
+    """取得月度會計總表"""
+    conn = _get_conn()
+    row = conn.execute(
+        "SELECT * FROM monthly_accounting WHERE year_month=?", (year_month,)
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None

@@ -760,9 +760,37 @@ def build_reports_menu() -> dict:
         "type": "carousel",
         "contents": [
             _reports_card_intro(),
+            _reports_card_accounting(),
             _reports_card_financial(),
             _reports_card_export(),
         ],
+    }
+
+
+def _reports_card_accounting() -> dict:
+    """會計帳冊卡片"""
+    return {
+        "type": "bubble", "size": "kilo",
+        "header": _header_box("會計帳冊", "📒"),
+        "body": {
+            "type": "box", "layout": "vertical", "spacing": "sm",
+            "paddingAll": "16px",
+            "contents": [
+                {"type": "text", "text": "複式簿記（借貸平衡）",
+                 "size": "xs", "color": COLOR_TEXT_SUB, "wrap": True},
+                {"type": "separator", "margin": "sm"},
+                _action_button("📊 本月會計摘要",
+                               "action=report&type=accounting_summary",
+                               display_text="📊 會計摘要"),
+                _action_button("📒 生成帳冊 Excel",
+                               "action=report&type=accounting_excel",
+                               color=COLOR_SECONDARY,
+                               display_text="📒 生成帳冊"),
+                _action_button("📝 試算表（借貸驗證）",
+                               "action=report&type=trial_balance",
+                               display_text="📝 試算表"),
+            ],
+        },
     }
 
 

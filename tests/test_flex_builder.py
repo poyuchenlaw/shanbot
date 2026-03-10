@@ -249,20 +249,27 @@ class TestExportMenu(unittest.TestCase):
     def test_type_is_carousel(self):
         self.assertEqual(self.result["type"], "carousel")
 
-    def test_has_three_cards(self):
-        self.assertEqual(len(self.result["contents"]), 3)
+    def test_has_four_cards(self):
+        self.assertEqual(len(self.result["contents"]), 4)
 
     def test_intro_card_title(self):
         header_text = self.result["contents"][0]["header"]["contents"][0]["text"]
         self.assertIn("報表生成", header_text)
 
-    def test_financial_card_has_four_buttons(self):
+    def test_accounting_card(self):
         card = self.result["contents"][1]
+        header_text = card["header"]["contents"][0]["text"]
+        self.assertIn("會計帳冊", header_text)
+        buttons = _collect_buttons(card)
+        self.assertGreaterEqual(len(buttons), 3)
+
+    def test_financial_card_has_four_buttons(self):
+        card = self.result["contents"][2]
         buttons = _collect_buttons(card)
         self.assertEqual(len(buttons), 4)
 
     def test_export_card_has_export_types(self):
-        card = self.result["contents"][2]
+        card = self.result["contents"][3]
         buttons = _collect_buttons(card)
         data_values = [b["action"]["data"] for b in buttons]
         expected_types = ["monthly", "annual", "mof_txt",
@@ -739,17 +746,22 @@ class TestReportsMenu(unittest.TestCase):
     def test_type_is_carousel(self):
         self.assertEqual(self.result["type"], "carousel")
 
-    def test_has_three_cards(self):
-        self.assertEqual(len(self.result["contents"]), 3)
+    def test_has_four_cards(self):
+        self.assertEqual(len(self.result["contents"]), 4)
+
+    def test_accounting_card_has_buttons(self):
+        card = self.result["contents"][1]
+        buttons = _collect_buttons(card)
+        self.assertGreaterEqual(len(buttons), 3)
 
     def test_financial_card_has_four_report_buttons(self):
-        card = self.result["contents"][1]
+        card = self.result["contents"][2]
         buttons = _collect_buttons(card)
         # 四大報表 = 4 buttons
         self.assertEqual(len(buttons), 4)
 
     def test_export_card_has_export_buttons(self):
-        card = self.result["contents"][2]
+        card = self.result["contents"][3]
         buttons = _collect_buttons(card)
         self.assertTrue(len(buttons) >= 5)
 

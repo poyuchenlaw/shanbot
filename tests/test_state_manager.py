@@ -48,7 +48,7 @@ class TestInitDb(unittest.TestCase):
             "ingredients", "suppliers", "purchase_staging", "purchase_items",
             "price_history", "recipes", "recipe_ingredients", "menu_schedule",
             "monthly_cost", "config", "tax_exports", "account_mapping",
-            "conversation_state",
+            "conversation_state", "journal_entries", "monthly_accounting",
         ]
         for t in expected_tables:
             self.assertIn(t, counts, f"Missing table: {t}")
@@ -57,7 +57,7 @@ class TestInitDb(unittest.TestCase):
     def test_account_mapping_seeded(self):
         import state_manager as sm
         mappings = sm.get_all_account_mappings()
-        self.assertEqual(len(mappings), 15)
+        self.assertEqual(len(mappings), 21)
 
     def test_account_mapping_categories(self):
         import state_manager as sm

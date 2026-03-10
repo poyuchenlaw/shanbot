@@ -24,7 +24,7 @@ async def handle_postback(line_service, data_str: str, group_id: str,
 
     # === 六宮格主選單 ===
     if menu:
-        flex = _handle_menu(menu)
+        flex = _handle_menu(menu, group_id)
         if flex:
             line_service.reply_flex(reply_token, _alt_text(menu), flex)
             return
@@ -72,7 +72,7 @@ async def handle_postback(line_service, data_str: str, group_id: str,
 
 # === 六宮格主選單 ===
 
-def _handle_menu(menu: str) -> dict | None:
+def _handle_menu(menu: str, group_id: str = None) -> dict | None:
     if menu == "camera":
         return fb.build_camera_menu()
     elif menu == "finance":
@@ -80,7 +80,7 @@ def _handle_menu(menu: str) -> dict | None:
     elif menu == "finance_upload":
         return fb.build_finance_upload_menu()
     elif menu == "purchase":
-        pending_count = len(sm.get_pending_stagings())
+        pending_count = len(sm.get_pending_stagings(group_id))
         return fb.build_purchase_menu(pending_count)
     elif menu == "menu_plan":
         return fb.build_menu_plan_menu()
@@ -110,6 +110,12 @@ async def _handle_report(line_service, params: dict, group_id: str, reply_token:
         await _gen_expense_report(line_service, ym, period, reply_token)
     elif report_type == "income":
         await _gen_income_report(line_service, ym, period, reply_token)
+    elif report_type == "accounting_summary":
+        _gen_accounting_summary(line_service, ym, reply_token)
+    elif report_type == "accounting_excel":
+        _gen_accounting_excel(line_service, ym, reply_token)
+    elif report_type == "trial_balance":
+        _gen_trial_balance(line_service, ym, reply_token)
     else:
         line_service.reply(reply_token, f"未知報表類型：{report_type}")
 
@@ -182,6 +188,62 @@ async def _gen_income_report(line_service, ym: str, period: str, reply_token: st
         total += amt
         lines.append(f"  • {entry.get('description', '')}：${amt:,.0f}")
     lines.append(f"\n合計：${total:,.0f}")
+    line_service.reply(reply_token, "\n".join(lines))
+
+
+def _gen_accounting_summary(line_service, ym: str, reply_token: str):
+    """會計摘要（借貸平衡驗證）"""
+    try:
+        from services.accounting_service import get_monthly_report_text
+        text = get_monthly_report_text(ym)
+        line_service.reply(reply_token, text)
+    except Exception as e:
+        logger.error(f"Accounting summary error: {e}")
+        line_service.reply(reply_token, f"⚠️ 會計資料讀取失敗：{e}")
+
+
+def _gen_accounting_excel(line_service, ym: str, reply_token: str):
+    """生成會計帳冊 Excel"""
+    try:
+        from services.accounting_service import generate_accounting_excel
+        path = generate_accounting_excel(ym)
+        if path:
+            line_service.reply(reply_token,
+                               f"✅ {ym} 會計帳冊已生成\n"
+                               f"📁 會計帳冊/{ym}/\n"
+                               f"含：進貨日記帳 + 費用彙總 + 試算表 + 分錄明細")
+        else:
+            line_service.reply(reply_token, "⚠️ 帳冊生成失敗")
+    except Exception as e:
+        logger.error(f"Accounting Excel error: {e}")
+        line_service.reply(reply_token, f"⚠️ 帳冊生成失敗：{e}")
+
+
+def _gen_trial_balance(line_service, ym: str, reply_token: str):
+    """試算表文字版"""
+    trial = sm.get_trial_balance(ym)
+    if not trial:
+        line_service.reply(reply_token, f"📝 {ym} 試算表\n\n尚無分錄資料")
+        return
+
+    lines = [f"📝 {ym} 試算表", ""]
+    lines.append(f"{'科目':<12} {'借方':>10} {'貸方':>10}")
+    lines.append("─" * 36)
+
+    sum_d = 0
+    sum_c = 0
+    for t in trial:
+        d = t["total_debit"] or 0
+        c = t["total_credit"] or 0
+        sum_d += d
+        sum_c += c
+        lines.append(f"{t['account_name']:<10} ${d:>9,.0f} ${c:>9,.0f}")
+
+    lines.append("─" * 36)
+    lines.append(f"{'合計':<10} ${sum_d:>9,.0f} ${sum_c:>9,.0f}")
+    diff = abs(sum_d - sum_c)
+    lines.append("")
+    lines.append("✅ 借貸平衡" if diff < 1 else f"❌ 差額 ${diff:,.0f}")
     line_service.reply(reply_token, "\n".join(lines))
 
 

@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import re
+from datetime import datetime
 from typing import Optional
 
 import state_manager as sm
@@ -169,6 +170,17 @@ async def handle_text(line_service, text: str, group_id: str,
     if text_lower in ("上傳契約", "傳契約"):
         sm.set_state(group_id, "waiting_contract_photo", {})
         return "📄 請傳送勞動契約照片或 PDF\nAI 將自動辨識員工資料\n回覆「取消」可取消"
+
+    # === 會計帳冊 ===
+    if text_lower in ("會計", "帳冊", "會計報表"):
+        return _show_accounting_summary()
+
+    accounting_match = re.match(r"會計\s*(\d{4}-\d{2})", text_lower)
+    if accounting_match:
+        return _show_accounting_summary(accounting_match.group(1))
+
+    if text_lower in ("更新帳冊", "生成帳冊"):
+        return await _generate_accounting_excel()
 
     # === 菜單表格 ===
     if text_lower in ("菜單表格", "建立菜單", "菜單模板"):
@@ -341,6 +353,14 @@ async def _execute_archive(staging_id: int, staging: dict, group_id: str) -> str
     # GDrive 正式歸檔
     gdrive_note = await _do_archive(staging_id, staging)
 
+    # 自動會計處理：分錄 + Excel + 月度彙總
+    accounting_note = ""
+    try:
+        from services.accounting_service import process_after_archive
+        accounting_note = process_after_archive(staging_id)
+    except Exception as e:
+        logger.warning(f"Accounting process skipped: {e}")
+
     sm.clear_state(group_id)
     return (
         f"✅ 記錄 #{staging_id} 已確認歸檔\n"
@@ -348,6 +368,7 @@ async def _execute_archive(staging_id: int, staging: dict, group_id: str) -> str
         f"金額：${staging['total_amount']:,.0f}\n"
         f"歸屬月份：{staging['year_month']}"
         f"{gdrive_note}"
+        f"{accounting_note}"
     )
 
 
@@ -1682,5 +1703,38 @@ def _show_help() -> str:
         "  菜單表格 → 建立菜單排程\n"
         "  菜單完成 → 匯入菜單資料\n"
         "\n"
+        "📊 會計帳冊\n"
+        "  會計 → 本月會計摘要\n"
+        "  會計 2026-03 → 指定月份\n"
+        "  更新帳冊 → 重新生成 Excel\n"
+        "\n"
         "help → 顯示此說明"
     )
+
+
+# === 會計帳冊 ===
+
+def _show_accounting_summary(year_month: str = None) -> str:
+    """顯示月度會計摘要"""
+    if not year_month:
+        year_month = datetime.now().strftime("%Y-%m")
+    try:
+        from services.accounting_service import get_monthly_report_text
+        return get_monthly_report_text(year_month)
+    except Exception as e:
+        logger.error(f"Accounting summary error: {e}")
+        return f"⚠️ 會計資料讀取失敗：{e}"
+
+
+async def _generate_accounting_excel() -> str:
+    """手動觸發月度帳冊生成"""
+    year_month = datetime.now().strftime("%Y-%m")
+    try:
+        from services.accounting_service import generate_accounting_excel
+        path = generate_accounting_excel(year_month)
+        if path:
+            return f"✅ {year_month} 會計帳冊已更新\n📁 {path}"
+        return "⚠️ 帳冊生成失敗"
+    except Exception as e:
+        logger.error(f"Excel generation error: {e}")
+        return f"⚠️ 帳冊生成失敗：{e}"
