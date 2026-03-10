@@ -1,4 +1,4 @@
-"""會計自動化服務測試 — 複式簿記核心驗證"""
+"""會計自動化服務測試 — 完整會計循環驗證"""
 
 import asyncio
 import os
@@ -198,7 +198,7 @@ class TestTrialBalance(unittest.TestCase):
 
 
 class TestAccountingExcel(unittest.TestCase):
-    """Test 3: Excel 帳冊生成"""
+    """Test 3: Excel 帳冊生成（8 頁）"""
 
     def setUp(self):
         self.db_path = _setup_db()
@@ -224,13 +224,16 @@ class TestAccountingExcel(unittest.TestCase):
         self.assertIsNotNone(path)
         self.assertTrue(os.path.exists(path))
 
-        # 驗證 Excel 內容
+        # 驗證 Excel 內容 — 8 個工作表
         import openpyxl
         wb = openpyxl.load_workbook(path)
         self.assertIn("進貨日記帳", wb.sheetnames)
         self.assertIn("月度費用彙總", wb.sheetnames)
         self.assertIn("試算表", wb.sheetnames)
         self.assertIn("分錄明細", wb.sheetnames)
+        self.assertIn("損益表", wb.sheetnames)
+        self.assertIn("資產負債表", wb.sheetnames)
+        self.assertIn("總分類帳", wb.sheetnames)
 
     def test_empty_month(self):
         import state_manager as sm
@@ -373,6 +376,319 @@ class TestJournalEntryCRUD(unittest.TestCase):
         sm.delete_journal_entries_by_source("purchase", 1)
         entries = sm.get_journal_entries_by_source("purchase", 1)
         self.assertEqual(len(entries), 0)
+
+
+class TestIncomeJournal(unittest.TestCase):
+    """Test 7: 收入分錄 — 含銷項稅額"""
+
+    def setUp(self):
+        self.db_path = _setup_db()
+
+    def tearDown(self):
+        _teardown_db(self.db_path)
+
+    def test_income_journal_with_tax(self):
+        """收入 → 分錄含銷項稅額"""
+        import state_manager as sm
+        from services.accounting_service import generate_income_journal_entries
+
+        income_id = sm.add_income("2026-03", 105000, "團膳收入", "現金", "2026-03-31")
+        entries = generate_income_journal_entries(income_id)
+        self.assertGreater(len(entries), 0)
+
+        # 應有銷項稅額
+        tax_entries = [e for e in entries if e["account"] == "銷項稅額"]
+        self.assertEqual(len(tax_entries), 1)
+        self.assertEqual(tax_entries[0]["amount"], 5000)
+
+        # 營業收入未稅
+        revenue = [e for e in entries if e["account"] == "營業收入"]
+        self.assertEqual(len(revenue), 1)
+        self.assertEqual(revenue[0]["amount"], 100000)
+
+        # 借貸平衡
+        total_d = sum(e["amount"] for e in entries if e["side"] == "debit")
+        total_c = sum(e["amount"] for e in entries if e["side"] == "credit")
+        self.assertEqual(total_d, total_c)
+
+
+class TestPayrollJournal(unittest.TestCase):
+    """Test 8: 薪資分錄"""
+
+    def setUp(self):
+        self.db_path = _setup_db()
+
+    def tearDown(self):
+        _teardown_db(self.db_path)
+
+    def test_payroll_journal(self):
+        """薪資 → 分錄（含勞健保/稅）"""
+        import state_manager as sm
+        from services.accounting_service import generate_payroll_journal_entries
+
+        # 建立員工和薪資
+        emp_id = sm.add_employee(name="王小明", base_salary=30000,
+                                 meal_allowance=2400)
+        sm.add_payroll(
+            employee_id=emp_id, year_month="2026-03",
+            base_salary=30000, meal_allowance=2400,
+            overtime_pay=0, bonus=0, gross_salary=32400,
+            labor_insurance=686, health_insurance=442,
+            pension_self=0, income_tax=0,
+            net_salary=31272, status="confirmed",
+        )
+
+        entries = generate_payroll_journal_entries("2026-03")
+        self.assertGreater(len(entries), 0)
+
+        # 應有薪資費用借方
+        salary_d = [e for e in entries if e["account"] == "薪資費用" and e["side"] == "debit"]
+        self.assertGreater(len(salary_d), 0)
+
+        # 應有現金貸方
+        cash_c = [e for e in entries if e["account"] == "現金" and e["side"] == "credit"]
+        self.assertGreater(len(cash_c), 0)
+
+        # 借貸平衡
+        total_d = sum(e["amount"] for e in entries if e["side"] == "debit")
+        total_c = sum(e["amount"] for e in entries if e["side"] == "credit")
+        self.assertAlmostEqual(total_d, total_c, delta=1)
+
+
+class TestPeriodEndClosing(unittest.TestCase):
+    """Test 9: 期末結帳"""
+
+    def setUp(self):
+        self.db_path = _setup_db()
+
+    def tearDown(self):
+        _teardown_db(self.db_path)
+
+    def test_closing(self):
+        """結帳 → 收入費用結轉到本期損益"""
+        import state_manager as sm
+        from services.accounting_service import (
+            generate_journal_entries, generate_income_journal_entries,
+            perform_period_end_closing,
+        )
+
+        # 進貨
+        sid = _create_confirmed_staging(sm)
+        _add_items(sm, sid)
+        generate_journal_entries(sid)
+
+        # 收入
+        inc_id = sm.add_income("2026-03", 50000, "團膳收入", "現金", "2026-03-31")
+        generate_income_journal_entries(inc_id)
+
+        # 結帳
+        result = perform_period_end_closing("2026-03")
+        self.assertEqual(result["status"], "closed")
+        self.assertGreater(result["total_revenue"], 0)
+
+        # 月度表標記已結帳
+        acct = sm.get_monthly_accounting("2026-03")
+        self.assertIsNotNone(acct)
+        self.assertEqual(acct["is_closed"], 1)
+
+    def test_double_closing(self):
+        """重複結帳 → 返回 already_closed"""
+        import state_manager as sm
+        from services.accounting_service import perform_period_end_closing
+
+        sm.upsert_monthly_accounting("2026-03", is_closed=1)
+        result = perform_period_end_closing("2026-03")
+        self.assertEqual(result["status"], "already_closed")
+
+
+class TestFinancialStatements(unittest.TestCase):
+    """Test 10: 財務報表"""
+
+    def setUp(self):
+        self.db_path = _setup_db()
+
+    def tearDown(self):
+        _teardown_db(self.db_path)
+
+    def test_income_statement(self):
+        """損益表 — 收入 - 成本 - 費用 = 淨利"""
+        import state_manager as sm
+        from services.accounting_service import (
+            generate_journal_entries, generate_income_journal_entries,
+            generate_income_statement,
+        )
+
+        sid = _create_confirmed_staging(sm)
+        _add_items(sm, sid)
+        generate_journal_entries(sid)
+
+        inc_id = sm.add_income("2026-03", 100000, "團膳收入", "現金", "2026-03-31")
+        generate_income_journal_entries(inc_id)
+
+        pl = generate_income_statement("2026-03")
+        self.assertGreater(pl["revenue"], 0)
+        self.assertGreater(pl["cost"], 0)
+        self.assertEqual(pl["net_income"], pl["revenue"] - pl["cost"] - pl["expense"])
+
+    def test_balance_sheet(self):
+        """資產負債表 — 有資料就能跑"""
+        import state_manager as sm
+        from services.accounting_service import (
+            generate_journal_entries, generate_balance_sheet,
+        )
+
+        sid = _create_confirmed_staging(sm)
+        _add_items(sm, sid)
+        generate_journal_entries(sid)
+
+        bs = generate_balance_sheet("2026-03")
+        # 只有進貨分錄時，資產（現金為負）和成本分錄都在
+        self.assertIsNotNone(bs["year_month"])
+
+
+class TestVATSummary(unittest.TestCase):
+    """Test 11: 營業稅摘要"""
+
+    def setUp(self):
+        self.db_path = _setup_db()
+
+    def tearDown(self):
+        _teardown_db(self.db_path)
+
+    def test_vat_summary(self):
+        import state_manager as sm
+        from services.accounting_service import (
+            generate_journal_entries, generate_income_journal_entries,
+            get_vat_summary,
+        )
+
+        # 進項
+        sid = _create_confirmed_staging(sm, total=10500, subtotal=10000, tax=500)
+        _add_items(sm, sid)
+        generate_journal_entries(sid)
+
+        # 銷項
+        inc_id = sm.add_income("2026-03", 21000, "收入", "現金", "2026-03-31")
+        generate_income_journal_entries(inc_id)
+
+        vat = get_vat_summary("2026-03")
+        self.assertGreater(vat["input_tax"], 0)
+        self.assertGreater(vat["output_tax"], 0)
+        self.assertIn(vat["status"], ["應繳", "留抵"])
+
+
+class TestChartOfAccounts(unittest.TestCase):
+    """Test 12: 會計科目表"""
+
+    def setUp(self):
+        self.db_path = _setup_db()
+
+    def tearDown(self):
+        _teardown_db(self.db_path)
+
+    def test_full_chart(self):
+        import state_manager as sm
+
+        coa = sm.get_chart_of_accounts()
+        self.assertGreater(len(coa), 40, "應有 40+ 科目")
+
+        # 各類別都有
+        categories = set(a["category"] for a in coa)
+        self.assertIn("asset", categories)
+        self.assertIn("liability", categories)
+        self.assertIn("equity", categories)
+        self.assertIn("revenue", categories)
+        self.assertIn("cost", categories)
+        self.assertIn("expense", categories)
+
+    def test_filter_by_category(self):
+        import state_manager as sm
+
+        assets = sm.get_chart_of_accounts("asset")
+        self.assertGreater(len(assets), 0)
+        for a in assets:
+            self.assertEqual(a["category"], "asset")
+
+
+class TestFixedAssets(unittest.TestCase):
+    """Test 13: 固定資產"""
+
+    def setUp(self):
+        self.db_path = _setup_db()
+
+    def tearDown(self):
+        _teardown_db(self.db_path)
+
+    def test_add_and_depreciate(self):
+        import state_manager as sm
+        from services.accounting_service import generate_depreciation_entries
+
+        aid = sm.add_fixed_asset(
+            name="冷藏設備", category="機器設備",
+            purchase_date="2026-01-01", cost=120000,
+            useful_life_months=60, salvage_value=0,
+        )
+        self.assertGreater(aid, 0)
+
+        entries = generate_depreciation_entries("2026-03")
+        self.assertEqual(len(entries), 2)  # 借折舊+貸累計
+
+        # 月折舊 = 120000 / 60 = 2000
+        dep_entry = [e for e in entries if e["account"] == "折舊費用"][0]
+        self.assertEqual(dep_entry["amount"], 2000)
+
+        # 累計折舊已更新
+        asset = sm.get_fixed_assets()[0]
+        self.assertEqual(asset["accumulated_depreciation"], 2000)
+
+
+class TestGeneralLedger(unittest.TestCase):
+    """Test 14: 總分類帳"""
+
+    def setUp(self):
+        self.db_path = _setup_db()
+
+    def tearDown(self):
+        _teardown_db(self.db_path)
+
+    def test_general_ledger(self):
+        import state_manager as sm
+        from services.accounting_service import generate_journal_entries
+
+        sid = _create_confirmed_staging(sm)
+        _add_items(sm, sid)
+        generate_journal_entries(sid)
+
+        # 全科目
+        ledger = sm.get_general_ledger("2026-03")
+        self.assertGreater(len(ledger), 0)
+
+        # 指定科目
+        cash_ledger = sm.get_general_ledger("2026-03", "1100")
+        self.assertGreater(len(cash_ledger), 0)
+        for e in cash_ledger:
+            self.assertEqual(e["account_code"], "1100")
+
+
+class TestTrainingDocument(unittest.TestCase):
+    """Test 15: 教育訓練文件生成"""
+
+    def setUp(self):
+        self.db_path = _setup_db()
+        self.tmpdir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        _teardown_db(self.db_path)
+        import shutil
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_generate_training_doc(self):
+        from services import accounting_service as acct
+
+        acct.ACCOUNTING_DIR = self.tmpdir
+        path = acct.generate_training_document(self.tmpdir)
+        self.assertTrue(os.path.exists(path))
+        self.assertTrue(path.endswith(".docx"))
 
 
 if __name__ == "__main__":

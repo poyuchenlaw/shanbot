@@ -182,6 +182,34 @@ async def handle_text(line_service, text: str, group_id: str,
     if text_lower in ("更新帳冊", "生成帳冊"):
         return await _generate_accounting_excel()
 
+    # 期末結帳
+    closing_match = re.match(r"結帳\s*(\d{4}-\d{2})", text_lower)
+    if text_lower == "結帳":
+        return await _perform_period_closing()
+    if closing_match:
+        return await _perform_period_closing(closing_match.group(1))
+
+    # 損益表
+    income_match = re.match(r"損益表\s*(\d{4}-\d{2})", text_lower)
+    if text_lower == "損益表":
+        return _show_income_statement()
+    if income_match:
+        return _show_income_statement(income_match.group(1))
+
+    # 營業稅 / 401 申報
+    vat_match = re.match(r"(?:營業稅|401)\s*(\d{4}-\d{2})", text_lower)
+    if text_lower in ("營業稅", "401"):
+        return _show_vat_summary()
+    if vat_match:
+        return _show_vat_summary(vat_match.group(1))
+
+    # 資產負債表
+    bs_match = re.match(r"資產負債表\s*(\d{4}-\d{2})", text_lower)
+    if text_lower == "資產負債表":
+        return _show_balance_sheet()
+    if bs_match:
+        return _show_balance_sheet(bs_match.group(1))
+
     # === 菜單表格 ===
     if text_lower in ("菜單表格", "建立菜單", "菜單模板"):
         return await _handle_menu_template()
@@ -1666,7 +1694,7 @@ async def _handle_menu_import() -> str:
 def _show_help() -> str:
     """顯示使用說明"""
     return (
-        "🍳 小膳 Bot v2.5 使用說明\n"
+        "🍳 小膳 Bot v2.7 使用說明\n"
         "━━━━━━━━━━━━━━\n"
         "\n"
         "💡 點選下方「📋 小膳功能選單」\n"
@@ -1708,6 +1736,15 @@ def _show_help() -> str:
         "  會計 2026-03 → 指定月份\n"
         "  更新帳冊 → 重新生成 Excel\n"
         "\n"
+        "📒 進階會計\n"
+        "  結帳 → 本月期末結帳\n"
+        "  結帳 2026-03 → 指定月份結帳\n"
+        "  損益表 → 本月損益表\n"
+        "  損益表 2026-03 → 指定月份\n"
+        "  資產負債表 → 本月資產負債表\n"
+        "  營業稅 / 401 → 本期營業稅摘要\n"
+        "  營業稅 2026-01 → 指定稅期\n"
+        "\n"
         "help → 顯示此說明"
     )
 
@@ -1738,3 +1775,113 @@ async def _generate_accounting_excel() -> str:
     except Exception as e:
         logger.error(f"Excel generation error: {e}")
         return f"⚠️ 帳冊生成失敗：{e}"
+
+
+async def _perform_period_closing(year_month: str = None) -> str:
+    """期末結帳（結轉損益）"""
+    if not year_month:
+        year_month = datetime.now().strftime("%Y-%m")
+    try:
+        from services.accounting_service import perform_period_end_closing
+        result = perform_period_end_closing(year_month)
+        if result.get("error"):
+            return f"⚠️ {result['error']}"
+        net = result.get("net_income", 0)
+        sign = "淨利" if net >= 0 else "淨損"
+        return (
+            f"✅ {year_month} 期末結帳完成\n"
+            f"━━━━━━━━━━━━━━\n"
+            f"📊 結轉科目數：{result.get('closed_accounts', 0)}\n"
+            f"📊 結轉分錄數：{result.get('entries_created', 0)}\n"
+            f"💰 本期{sign}：${abs(net):,.0f}"
+        )
+    except Exception as e:
+        logger.error(f"Period closing error: {e}")
+        return f"⚠️ 結帳失敗：{e}"
+
+
+def _show_income_statement(year_month: str = None) -> str:
+    """顯示損益表"""
+    if not year_month:
+        year_month = datetime.now().strftime("%Y-%m")
+    try:
+        from services.accounting_service import generate_income_statement
+        stmt = generate_income_statement(year_month)
+
+        lines = [
+            f"📊 {year_month} 損益表",
+            "━━━━━━━━━━━━━━",
+            f"營業收入：${stmt.get('total_revenue', 0):,.0f}",
+            f"營業成本：${stmt.get('total_cost', 0):,.0f}",
+            f"營業毛利：${stmt.get('gross_profit', 0):,.0f}",
+            f"營業費用：${stmt.get('total_expense', 0):,.0f}",
+            "━━━━━━━━━━━━━━",
+        ]
+        net = stmt.get("net_income", 0)
+        sign = "淨利" if net >= 0 else "淨損"
+        lines.append(f"💰 本期{sign}：${abs(net):,.0f}")
+        return "\n".join(lines)
+    except Exception as e:
+        logger.error(f"Income statement error: {e}")
+        return f"⚠️ 損益表讀取失敗：{e}"
+
+
+def _show_balance_sheet(year_month: str = None) -> str:
+    """顯示資產負債表"""
+    if not year_month:
+        year_month = datetime.now().strftime("%Y-%m")
+    try:
+        from services.accounting_service import generate_balance_sheet
+        bs = generate_balance_sheet(year_month)
+
+        lines = [
+            f"📊 {year_month} 資產負債表",
+            "━━━━━━━━━━━━━━",
+            f"資產合計：${bs.get('total_assets', 0):,.0f}",
+            f"負債合計：${bs.get('total_liabilities', 0):,.0f}",
+            f"權益合計：${bs.get('total_equity', 0):,.0f}",
+            "━━━━━━━━━━━━━━",
+        ]
+        if bs.get("is_balanced"):
+            lines.append("✅ 借貸平衡")
+        else:
+            diff = bs.get("difference", 0)
+            lines.append(f"⚠️ 借貸不平衡，差額 ${diff:,.0f}")
+        return "\n".join(lines)
+    except Exception as e:
+        logger.error(f"Balance sheet error: {e}")
+        return f"⚠️ 資產負債表讀取失敗：{e}"
+
+
+def _show_vat_summary(start_month: str = None) -> str:
+    """顯示營業稅（401）摘要"""
+    if not start_month:
+        # 自動判斷當期：奇數月開始（1-2, 3-4, 5-6...）
+        now = datetime.now()
+        m = now.month
+        start_m = m if m % 2 == 1 else m - 1
+        start_month = f"{now.year}-{start_m:02d}"
+
+    try:
+        from services.accounting_service import get_vat_summary
+        vat = get_vat_summary(start_month)
+
+        lines = [
+            f"🧾 {vat.get('period', '')} 營業稅摘要（401）",
+            "━━━━━━━━━━━━━━",
+            f"銷項稅額：${vat.get('output_tax', 0):,.0f}",
+            f"進項稅額：${vat.get('input_tax', 0):,.0f}",
+            "━━━━━━━━━━━━━━",
+        ]
+        net = vat.get("net_tax", 0)
+        if net >= 0:
+            lines.append(f"💰 應繳稅額：${net:,.0f}")
+        else:
+            lines.append(f"💰 留抵稅額：${abs(net):,.0f}")
+
+        lines.append(f"\n📦 銷項筆數：{vat.get('output_count', 0)}")
+        lines.append(f"📦 進項筆數：{vat.get('input_count', 0)}")
+        return "\n".join(lines)
+    except Exception as e:
+        logger.error(f"VAT summary error: {e}")
+        return f"⚠️ 營業稅摘要讀取失敗：{e}"

@@ -49,6 +49,7 @@ class TestInitDb(unittest.TestCase):
             "price_history", "recipes", "recipe_ingredients", "menu_schedule",
             "monthly_cost", "config", "tax_exports", "account_mapping",
             "conversation_state", "journal_entries", "monthly_accounting",
+            "chart_of_accounts", "fixed_assets",
         ]
         for t in expected_tables:
             self.assertIn(t, counts, f"Missing table: {t}")
@@ -57,7 +58,7 @@ class TestInitDb(unittest.TestCase):
     def test_account_mapping_seeded(self):
         import state_manager as sm
         mappings = sm.get_all_account_mappings()
-        self.assertEqual(len(mappings), 21)
+        self.assertEqual(len(mappings), 28)
 
     def test_account_mapping_categories(self):
         import state_manager as sm
@@ -594,7 +595,7 @@ class TestAccountMapping(unittest.TestCase):
     def test_get_utility(self):
         import state_manager as sm
         m = sm.get_account_mapping("水電")
-        self.assertEqual(m["account_code"], "6180")
+        self.assertEqual(m["account_code"], "6130")
 
     def test_get_nonexistent(self):
         import state_manager as sm

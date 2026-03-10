@@ -291,6 +291,7 @@ CREATE TABLE IF NOT EXISTS journal_entries (
     year_month TEXT NOT NULL,
     source_type TEXT NOT NULL DEFAULT 'purchase',
     source_id INTEGER,
+    entry_type TEXT DEFAULT 'normal',
     description TEXT DEFAULT '',
     account_code TEXT NOT NULL,
     account_name TEXT DEFAULT '',
@@ -308,8 +309,36 @@ CREATE TABLE IF NOT EXISTS monthly_accounting (
     total_tax REAL DEFAULT 0,
     net_profit REAL DEFAULT 0,
     journal_count INTEGER DEFAULT 0,
+    is_closed INTEGER DEFAULT 0,
     excel_path TEXT,
     updated_at TEXT DEFAULT (datetime('now','localtime'))
+);
+
+-- 20. 會計科目表（EAS 中小企業會計準則 — 完整二級科目）
+CREATE TABLE IF NOT EXISTS chart_of_accounts (
+    code TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    category TEXT NOT NULL,
+    parent_code TEXT DEFAULT '',
+    normal_side TEXT DEFAULT 'debit',
+    is_active INTEGER DEFAULT 1,
+    notes TEXT DEFAULT ''
+);
+
+-- 21. 固定資產
+CREATE TABLE IF NOT EXISTS fixed_assets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    category TEXT DEFAULT '',
+    purchase_date TEXT,
+    cost REAL DEFAULT 0,
+    useful_life_months INTEGER DEFAULT 60,
+    salvage_value REAL DEFAULT 0,
+    depreciation_method TEXT DEFAULT 'straight_line',
+    accumulated_depreciation REAL DEFAULT 0,
+    status TEXT DEFAULT 'active',
+    notes TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now','localtime'))
 );
 """
 
@@ -325,17 +354,84 @@ INSERT OR IGNORE INTO account_mapping (category, account_code, account_name, par
 ('米糧', '5110', '進貨—米糧類', '5100'),
 ('其他', '5110', '進貨—其他', '5100'),
 ('人力', '5120', '直接人工', '5100'),
-('水電', '6180', '水電瓦斯費', '6100'),
+('水電', '6130', '水電瓦斯費', '6100'),
 ('租金', '6120', '租金支出', '6100'),
-('設備', '6230', '折舊', '6100'),
+('設備', '6160', '折舊費用', '6100'),
 ('運費', '6150', '運費', '6100'),
-('保險', '6190', '保險費', '6100'),
+('保險', '6140', '保險費', '6100'),
 ('現金', '1100', '現金及約當現金', '1000'),
 ('應付帳款', '2100', '應付帳款', '2000'),
 ('進項稅額', '1150', '進項稅額', '1000'),
 ('銷項稅額', '2150', '銷項稅額', '2000'),
 ('營業收入', '4100', '營業收入', '4000'),
-('薪資', '6110', '薪資支出', '6100');
+('薪資', '6110', '薪資費用', '6100'),
+('應收帳款', '1200', '應收帳款', '1000'),
+('存貨', '1300', '存貨—原料', '1000'),
+('應付薪資', '2200', '應付薪資', '2000'),
+('勞健保', '6200', '勞健保費用', '6100'),
+('勞退', '6210', '勞退費用', '6100'),
+('代扣所得稅', '2310', '代扣所得稅', '2000'),
+('雜項', '6190', '其他營業費用', '6100');
+"""
+
+# EAS 中小企業會計準則 — 完整科目表（團膳業適用）
+_SEED_CHART_OF_ACCOUNTS = """
+INSERT OR IGNORE INTO chart_of_accounts (code, name, category, parent_code, normal_side) VALUES
+-- 1xxx 資產
+('1000', '資產', 'asset', '', 'debit'),
+('1100', '現金及約當現金', 'asset', '1000', 'debit'),
+('1150', '進項稅額', 'asset', '1000', 'debit'),
+('1200', '應收帳款', 'asset', '1000', 'debit'),
+('1300', '存貨—原料', 'asset', '1000', 'debit'),
+('1400', '預付款項', 'asset', '1000', 'debit'),
+('1500', '固定資產', 'asset', '1000', 'debit'),
+('1510', '機器設備', 'asset', '1500', 'debit'),
+('1520', '運輸設備', 'asset', '1500', 'debit'),
+('1530', '辦公設備', 'asset', '1500', 'debit'),
+('1540', '租賃改良', 'asset', '1500', 'debit'),
+('1550', '累計折舊', 'asset', '1500', 'credit'),
+-- 2xxx 負債
+('2000', '負債', 'liability', '', 'credit'),
+('2100', '應付帳款', 'liability', '2000', 'credit'),
+('2150', '銷項稅額', 'liability', '2000', 'credit'),
+('2200', '應付薪資', 'liability', '2000', 'credit'),
+('2210', '應付勞健保', 'liability', '2000', 'credit'),
+('2220', '應付勞退', 'liability', '2000', 'credit'),
+('2250', '預收款項', 'liability', '2000', 'credit'),
+('2300', '其他應付款', 'liability', '2000', 'credit'),
+('2310', '代扣所得稅', 'liability', '2000', 'credit'),
+-- 3xxx 權益
+('3000', '權益', 'equity', '', 'credit'),
+('3100', '資本額', 'equity', '3000', 'credit'),
+('3200', '累積盈虧', 'equity', '3000', 'credit'),
+('3300', '本期損益', 'equity', '3000', 'credit'),
+-- 4xxx 收入
+('4000', '收入', 'revenue', '', 'credit'),
+('4100', '營業收入', 'revenue', '4000', 'credit'),
+('4200', '其他收入', 'revenue', '4000', 'credit'),
+-- 5xxx 成本
+('5000', '成本', 'cost', '', 'debit'),
+('5100', '進貨', 'cost', '5000', 'debit'),
+('5110', '進貨—食材', 'cost', '5100', 'debit'),
+('5120', '直接人工', 'cost', '5100', 'debit'),
+('5130', '製造費用', 'cost', '5100', 'debit'),
+('5200', '銷貨成本', 'cost', '5000', 'debit'),
+-- 6xxx 費用
+('6000', '費用', 'expense', '', 'debit'),
+('6100', '營業費用', 'expense', '6000', 'debit'),
+('6110', '薪資費用', 'expense', '6100', 'debit'),
+('6120', '租金支出', 'expense', '6100', 'debit'),
+('6130', '水電瓦斯費', 'expense', '6100', 'debit'),
+('6140', '保險費', 'expense', '6100', 'debit'),
+('6150', '運費', 'expense', '6100', 'debit'),
+('6160', '折舊費用', 'expense', '6100', 'debit'),
+('6170', '文具用品', 'expense', '6100', 'debit'),
+('6180', '稅捐', 'expense', '6100', 'debit'),
+('6190', '其他營業費用', 'expense', '6100', 'debit'),
+('6200', '勞健保費用', 'expense', '6100', 'debit'),
+('6210', '勞退費用', 'expense', '6100', 'debit'),
+('6220', '加班費', 'expense', '6100', 'debit'),
+('6230', '伙食費', 'expense', '6100', 'debit');
 """
 
 
@@ -352,12 +448,23 @@ def init_db():
     conn = _get_conn()
     conn.executescript(_SCHEMA)
     conn.executescript(_SEED_ACCOUNT_MAPPING)
+    conn.executescript(_SEED_CHART_OF_ACCOUNTS)
     # 遷移：加入 image_hash 欄位（既有 DB 相容）
     try:
         conn.execute("ALTER TABLE purchase_staging ADD COLUMN image_hash TEXT")
         logger.info("Migration: added image_hash column to purchase_staging")
     except sqlite3.OperationalError:
         pass  # 欄位已存在
+    # 遷移：journal_entries 加入 entry_type 欄位
+    try:
+        conn.execute("ALTER TABLE journal_entries ADD COLUMN entry_type TEXT DEFAULT 'normal'")
+    except sqlite3.OperationalError:
+        pass
+    # 遷移：monthly_accounting 加入 is_closed 欄位
+    try:
+        conn.execute("ALTER TABLE monthly_accounting ADD COLUMN is_closed INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
     conn.commit()
     conn.close()
     logger.info(f"Database initialized: {DB_PATH}")
@@ -1009,6 +1116,7 @@ def get_table_counts() -> dict:
         "monthly_cost", "config", "tax_exports", "account_mapping",
         "conversation_state", "income", "financial_documents",
         "employees", "payroll", "journal_entries", "monthly_accounting",
+        "chart_of_accounts", "fixed_assets",
     ]
     conn = _get_conn()
     counts = {}
@@ -1370,3 +1478,104 @@ def get_monthly_accounting(year_month: str) -> Optional[dict]:
     ).fetchone()
     conn.close()
     return dict(row) if row else None
+
+
+# === 會計科目表 ===
+
+def get_chart_of_accounts(category: str = None) -> list[dict]:
+    """取得完整會計科目表"""
+    conn = _get_conn()
+    if category:
+        rows = conn.execute(
+            "SELECT * FROM chart_of_accounts WHERE category=? AND is_active=1 ORDER BY code",
+            (category,),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM chart_of_accounts WHERE is_active=1 ORDER BY code"
+        ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+# === 固定資產 ===
+
+def add_fixed_asset(**kwargs) -> int:
+    conn = _get_conn()
+    cols = list(kwargs.keys())
+    placeholders = ", ".join(["?"] * len(cols))
+    vals = list(kwargs.values())
+    cur = conn.execute(
+        f"INSERT INTO fixed_assets ({', '.join(cols)}) VALUES ({placeholders})", vals
+    )
+    conn.commit()
+    asset_id = cur.lastrowid
+    conn.close()
+    return asset_id
+
+
+def get_fixed_assets(status: str = "active") -> list[dict]:
+    conn = _get_conn()
+    rows = conn.execute(
+        "SELECT * FROM fixed_assets WHERE status=? ORDER BY purchase_date",
+        (status,),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def update_fixed_asset(asset_id: int, **kwargs):
+    conn = _get_conn()
+    sets = [f"{k}=?" for k in kwargs]
+    vals = list(kwargs.values()) + [asset_id]
+    conn.execute(f"UPDATE fixed_assets SET {', '.join(sets)} WHERE id=?", vals)
+    conn.commit()
+    conn.close()
+
+
+# === 總分類帳查詢 ===
+
+def get_general_ledger(year_month: str, account_code: str = None) -> list[dict]:
+    """取得總分類帳（T帳戶格式），可選指定科目"""
+    conn = _get_conn()
+    if account_code:
+        rows = conn.execute(
+            "SELECT * FROM journal_entries WHERE year_month=? AND account_code=? "
+            "ORDER BY entry_date, id",
+            (year_month, account_code),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM journal_entries WHERE year_month=? "
+            "ORDER BY account_code, entry_date, id",
+            (year_month,),
+        ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_account_running_balance(year_month: str, account_code: str) -> list[dict]:
+    """取得指定科目的逐筆餘額"""
+    conn = _get_conn()
+    rows = conn.execute(
+        "SELECT *, "
+        "SUM(debit - credit) OVER (ORDER BY entry_date, id) as running_balance "
+        "FROM journal_entries WHERE year_month=? AND account_code=? "
+        "ORDER BY entry_date, id",
+        (year_month, account_code),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_payroll_for_journal(year_month: str) -> list[dict]:
+    """取得指定月份已確認的薪資記錄（含員工名）"""
+    conn = _get_conn()
+    rows = conn.execute(
+        "SELECT p.*, e.name as employee_name FROM payroll p "
+        "JOIN employees e ON p.employee_id = e.id "
+        "WHERE p.year_month=? ORDER BY e.name",
+        (year_month,),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
