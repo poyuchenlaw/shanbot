@@ -361,29 +361,112 @@ def _discard_staging(staging_id: int) -> str:
 
 
 def _start_edit(staging_id: int, group_id: str) -> str:
-    """進入修改模式"""
+    """進入修改模式 — 主動偵測缺失欄位，用對話引導補齊"""
     staging = sm.get_staging(staging_id)
     if not staging:
         return f"找不到記錄 #{staging_id}"
 
-    sm.set_state(group_id, "waiting_edit", {"staging_id": staging_id})
     items = sm.get_purchase_items(staging_id)
 
-    lines = [f"✏️ 修改記錄 #{staging_id}", ""]
+    # 偵測哪些欄位缺失或不確定
+    missing_fields = _detect_missing_fields(staging, items)
+
+    sm.set_state(group_id, "waiting_edit", {
+        "staging_id": staging_id,
+        "missing_fields": missing_fields,  # 追蹤待補欄位
+        "current_asking": None,             # 目前正在問的欄位
+    })
+
+    if missing_fields:
+        # 有缺失 → 直接用對話方式問第一個問題
+        return _build_guided_prompt(staging_id, staging, items, missing_fields)
+    else:
+        # 資料都有 → 顯示目前內容，讓使用者自由修改
+        return _build_edit_summary(staging_id, staging, items)
+
+
+def _detect_missing_fields(staging: dict, items: list) -> list:
+    """偵測缺失或不確定的欄位，回傳待補清單"""
+    missing = []
+
+    supplier = staging.get("supplier_name") or ""
+    if not supplier or supplier in ("unknown", "未知", ""):
+        missing.append("supplier")
+
+    purchase_date = staging.get("purchase_date") or ""
+    if not purchase_date or purchase_date == "未知":
+        missing.append("date")
+
+    total = staging.get("total_amount") or 0
+    if not total or total == 0:
+        missing.append("total")
+
+    if not items:
+        missing.append("items")
+
+    return missing
+
+
+def _build_guided_prompt(staging_id: int, staging: dict, items: list,
+                         missing_fields: list) -> str:
+    """根據缺失欄位，組裝對話式引導提問"""
+    lines = [f"✏️ 記錄 #{staging_id} 有些資訊我辨識不出來，需要你幫忙補充：", ""]
+
+    # 顯示已有的資訊
+    has_info = []
+    supplier = staging.get("supplier_name") or ""
+    if supplier and supplier not in ("unknown", "未知"):
+        has_info.append(f"  供應商：{supplier}")
+    date = staging.get("purchase_date") or ""
+    if date and date != "未知":
+        has_info.append(f"  日期：{date}")
+    total = staging.get("total_amount") or 0
+    if total:
+        has_info.append(f"  總額：${total:,.0f}")
+    if items:
+        has_info.append(f"  品項：{len(items)} 項")
+
+    if has_info:
+        lines.append("目前辨識到的：")
+        lines.extend(has_info)
+        lines.append("")
+
+    # 用自然的語氣問第一個缺失項目
+    q = _get_question_for_field(missing_fields[0])
+    lines.append(q)
+
+    if len(missing_fields) > 1:
+        remaining = len(missing_fields) - 1
+        lines.append(f"（還有 {remaining} 項需要補充）")
+
+    return "\n".join(lines)
+
+
+def _get_question_for_field(field: str) -> str:
+    """針對各欄位產生自然的提問語句"""
+    questions = {
+        "supplier": "👉 廠商是誰？（直接打廠商名稱就好）",
+        "date": "👉 這是哪一天買的？（例如：3/10 或 2026-03-10）",
+        "total": "👉 總金額是多少？（直接打數字就好）",
+        "items": "👉 買了什麼項目？（例如：高麗菜5斤350、雞蛋2箱1200，用逗號隔開）",
+    }
+    return questions.get(field, "👉 請補充資訊")
+
+
+def _build_edit_summary(staging_id: int, staging: dict, items: list) -> str:
+    """顯示完整資訊摘要，供使用者自由修改"""
+    lines = [f"✏️ 記錄 #{staging_id} 目前內容：", ""]
     lines.append(f"供應商：{staging['supplier_name']}")
     lines.append(f"日期：{staging['purchase_date']}")
     lines.append(f"總額：${staging['total_amount']:,.0f}")
     lines.append("")
-    lines.append("品項清單：")
-    for i, item in enumerate(items, 1):
-        lines.append(f"  {i}. {item['item_name']} {item['quantity']}{item['unit']} "
-                     f"@${item['unit_price']:,.0f} = ${item['amount']:,.0f}")
-    lines.append("")
-    lines.append("請直接說要改什麼，例如：")
-    lines.append("  「總額應該是3500」")
-    lines.append("  「花菜是3斤不是2斤」")
-    lines.append("  「供應商是全聯」")
-
+    if items:
+        lines.append("品項清單：")
+        for i, item in enumerate(items, 1):
+            lines.append(f"  {i}. {item['item_name']} {item['quantity']}{item['unit']} "
+                         f"@${item['unit_price']:,.0f} = ${item['amount']:,.0f}")
+        lines.append("")
+    lines.append("直接說要改什麼，或回覆「同意」確認")
     return "\n".join(lines)
 
 
@@ -669,13 +752,19 @@ async def _handle_handler_response(text: str, group_id: str, state_data: dict) -
 
 
 async def _handle_edit_response(text: str, group_id: str, state_data: dict) -> str:
-    """處理修改回應 — 用 LLM 智慧比對使用者自然語言修改意圖"""
+    """處理修改回應 — 對話式引導 + 自然語言智慧比對"""
     staging_id = state_data.get("staging_id")
+    missing_fields = state_data.get("missing_fields", [])
 
-    # 同意 → 確認
-    if text.strip().lower() in ("同意", "ok", "好", "確認", "沒問題", "yes"):
+    # 同意/正確 → 確認
+    if text.strip().lower() in ("同意", "正確", "ok", "好", "確認", "沒問題", "yes"):
         sm.clear_state(group_id)
         return await _confirm_staging(staging_id, group_id)
+
+    # 放棄
+    if text.strip() in ("放棄", "取消", "算了"):
+        sm.clear_state(group_id)
+        return _discard_staging(staging_id)
 
     # 取得目前記錄
     staging = sm.get_staging(staging_id)
@@ -684,16 +773,66 @@ async def _handle_edit_response(text: str, group_id: str, state_data: dict) -> s
         return "狀態異常，請重新操作"
 
     items = sm.get_purchase_items(staging_id)
+    user_input = text.strip()
 
-    # 先嘗試本地正則解析（快速、無需 LLM）
-    changes = _parse_edit_local(text.strip())
+    # === 先嘗試明確格式（key=value 或「供應商是XXX」）— 不管引導模式 ===
+    explicit_changes = _parse_edit_local(user_input)
+    if explicit_changes:
+        for change in explicit_changes:
+            _apply_single_change(staging_id, staging, items, change)
+        staging = sm.get_staging(staging_id)
+        items = sm.get_purchase_items(staging_id)
+        still_missing = _detect_missing_fields(staging, items)
+        if still_missing:
+            sm.set_state(group_id, "waiting_edit", {
+                "staging_id": staging_id, "missing_fields": still_missing,
+            })
+            q = _get_question_for_field(still_missing[0])
+            return f"✅ 已更新！\n\n接下來：\n{q}"
+        sm.set_state(group_id, "waiting_edit", {
+            "staging_id": staging_id, "missing_fields": [],
+        })
+        return _build_edit_summary(staging_id, staging, items)
 
-    # 本地解析失敗 → 用 LLM 智慧比對
+    # === 對話引導模式：如果有待補欄位，嘗試將回答對應到當前問題 ===
+    if missing_fields:
+        applied_guided = _try_guided_answer(staging_id, staging, user_input, missing_fields)
+
+        if applied_guided:
+            # 成功補上 → 移除已補的欄位
+            remaining = [f for f in missing_fields if f not in applied_guided]
+
+            # 重新載入
+            staging = sm.get_staging(staging_id)
+            items = sm.get_purchase_items(staging_id)
+
+            if remaining:
+                # 還有下一題 → 繼續問
+                sm.set_state(group_id, "waiting_edit", {
+                    "staging_id": staging_id,
+                    "missing_fields": remaining,
+                })
+                q = _get_question_for_field(remaining[0])
+                applied_str = "、".join(applied_guided)
+                return f"👍 已補上{applied_str}！\n\n接下來：\n{q}"
+            else:
+                # 全部補齊 → 顯示完整結果，問要不要確認
+                sm.set_state(group_id, "waiting_edit", {
+                    "staging_id": staging_id,
+                    "missing_fields": [],
+                })
+                return _build_edit_summary(staging_id, staging, items)
+
+    # === 自由修改模式：用正則 + LLM 智慧比對 ===
+    changes = _parse_edit_local(user_input)
     if not changes:
-        changes = await _parse_edit_with_llm(staging, items, text.strip())
+        changes = await _parse_edit_with_llm(staging, items, user_input)
 
     if changes is None:
-        return "我不太確定您要修改什麼，可以再說清楚一點嗎？"
+        if missing_fields:
+            q = _get_question_for_field(missing_fields[0])
+            return f"我沒聽懂，可以再說一次嗎？\n\n{q}"
+        return "我不太確定你要修改什麼，可以再說清楚一點嗎？"
 
     # 套用修改
     applied = []
@@ -703,30 +842,143 @@ async def _handle_edit_response(text: str, group_id: str, state_data: dict) -> s
             applied.append(result)
 
     if not applied:
-        return "我不太確定您要修改什麼，可以再說清楚一點嗎？"
+        if missing_fields:
+            q = _get_question_for_field(missing_fields[0])
+            return f"我沒有辨識到修改內容，再試一次？\n\n{q}"
+        return "我不太確定你要修改什麼，可以再說清楚一點嗎？"
 
-    # 重新讀取最新狀態
+    # 重新讀取
     staging = sm.get_staging(staging_id)
     items = sm.get_purchase_items(staging_id)
 
-    # 組裝回覆：顯示修改結果 + 最新摘要
+    # 檢查是否還有缺失
+    still_missing = _detect_missing_fields(staging, items)
+
+    if still_missing:
+        sm.set_state(group_id, "waiting_edit", {
+            "staging_id": staging_id,
+            "missing_fields": still_missing,
+        })
+        lines = ["✅ 已修改："]
+        for a in applied:
+            lines.append(f"  • {a}")
+        lines.append("")
+        q = _get_question_for_field(still_missing[0])
+        lines.append(f"接下來：\n{q}")
+        return "\n".join(lines)
+
+    # 全部完整 → 顯示摘要
+    sm.set_state(group_id, "waiting_edit", {
+        "staging_id": staging_id,
+        "missing_fields": [],
+    })
     lines = ["✅ 已修改："]
     for a in applied:
         lines.append(f"  • {a}")
     lines.append("")
-    lines.append(f"📋 記錄 #{staging_id} 目前內容：")
-    lines.append(f"  供應商：{staging['supplier_name']}")
-    lines.append(f"  日期：{staging['purchase_date']}")
-    lines.append(f"  總額：${staging['total_amount']:,.0f}")
-    if items:
-        lines.append("  品項：")
-        for i, item in enumerate(items, 1):
-            lines.append(f"    {i}. {item['item_name']} {item['quantity']}{item['unit']} "
-                         f"= ${item['amount']:,.0f}")
-    lines.append("")
-    lines.append("回覆「同意」確認，或繼續說要改什麼")
-
+    lines.append(_build_edit_summary(staging_id, staging, items))
     return "\n".join(lines)
+
+
+def _try_guided_answer(staging_id: int, staging: dict, user_input: str,
+                       missing_fields: list) -> list:
+    """嘗試將使用者回答對應到引導問題的欄位，回傳已成功填入的欄位名稱"""
+    filled = []
+    current_field = missing_fields[0] if missing_fields else None
+
+    if current_field == "supplier":
+        # 使用者直接回答廠商名稱
+        name = user_input.strip()
+        # 清除可能的前綴
+        name = re.sub(r"^(?:廠商|供應商|店家)[是為：:=]?\s*", "", name).strip()
+        if name and len(name) <= 50:
+            sm.update_purchase_staging(staging_id, supplier_name=name)
+            filled.append("supplier")
+
+    elif current_field == "date":
+        # 嘗試解析日期
+        date_input = re.sub(r"^(?:日期|時間)[是為：:=]?\s*", "", user_input).strip()
+        parsed = _parse_date_input(date_input)
+        if parsed:
+            sm.update_purchase_staging(staging_id, purchase_date=parsed, year_month=parsed[:7])
+            filled.append("date")
+
+    elif current_field == "total":
+        # 嘗試解析金額
+        amt_input = re.sub(r"^(?:總額|金額|合計)[是為：:=]?\s*", "", user_input).strip()
+        amt_m = re.match(r"\$?(\d[\d,]*)", amt_input)
+        if amt_m:
+            amount = int(amt_m.group(1).replace(",", ""))
+            if amount > 0:
+                sm.update_purchase_staging(staging_id, total_amount=amount)
+                filled.append("total")
+
+    elif current_field == "items":
+        # 嘗試解析品項（簡單格式：品名數量金額，用逗號分隔）
+        items_text = re.sub(r"^(?:項目|品項|買了)[是為：:=]?\s*", "", user_input).strip()
+        parsed_items = _parse_items_input(staging_id, items_text)
+        if parsed_items:
+            filled.append("items")
+
+    return filled
+
+
+def _parse_date_input(text: str) -> str | None:
+    """解析各種日期格式"""
+    # YYYY-MM-DD or YYYY/MM/DD
+    m = re.match(r"(\d{4})[-/](\d{1,2})[-/](\d{1,2})", text)
+    if m:
+        return f"{m.group(1)}-{int(m.group(2)):02d}-{int(m.group(3)):02d}"
+
+    # M/D or MM/DD (assume current year)
+    m = re.match(r"(\d{1,2})[-/](\d{1,2})$", text)
+    if m:
+        from datetime import datetime
+        year = datetime.now().year
+        return f"{year}-{int(m.group(1)):02d}-{int(m.group(2)):02d}"
+
+    # 今天、昨天
+    from datetime import datetime, timedelta
+    if text in ("今天", "今日"):
+        return datetime.now().strftime("%Y-%m-%d")
+    if text in ("昨天", "昨日"):
+        return (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+
+    return None
+
+
+def _parse_items_input(staging_id: int, text: str) -> bool:
+    """解析品項文字輸入，存入 purchase_items 表"""
+    # 格式：品名數量金額，用逗號/頓號分隔
+    # 例如：「高麗菜5斤350、雞蛋2箱1200」
+    parts = re.split(r"[,，、;；\n]", text)
+    added = 0
+    for part in parts:
+        part = part.strip()
+        if not part:
+            continue
+        # 嘗試解析：品名 + 數量 + 單位 + 金額
+        m = re.match(r"(.+?)\s*(\d+\.?\d*)\s*(斤|公斤|kg|箱|包|顆|個|份|把|束|袋|瓶|罐|盒|打)?\s*[,，]?\s*\$?(\d+)", part)
+        if m:
+            name = m.group(1).strip()
+            qty = float(m.group(2))
+            unit = m.group(3) or ""
+            amount = int(m.group(4))
+            unit_price = amount / qty if qty else amount
+            sm.add_purchase_item(staging_id, item_name=name, quantity=qty,
+                                 unit=unit, unit_price=unit_price, amount=amount)
+            added += 1
+        else:
+            # 退而求其次：只有品名和金額
+            m2 = re.match(r"(.+?)\s*\$?(\d+)$", part)
+            if m2:
+                name = m2.group(1).strip()
+                amount = int(m2.group(2))
+                sm.add_purchase_item(staging_id, item_name=name, quantity=1,
+                                     unit="", unit_price=amount, amount=amount)
+                added += 1
+
+    return added > 0
 
 
 def _parse_edit_local(user_input: str) -> list | None:

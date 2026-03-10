@@ -138,7 +138,7 @@ class TestOcrRejectWords(unittest.TestCase):
         from handlers.command_handler import handle_text
         _create_pending_staging(sm)
         result = _run(handle_text(self.line_svc, "修改", "C001", "U001", "User", "RT001"))
-        self.assertIn("修改記錄", result)
+        self.assertIn("記錄 #", result)
         state, _ = sm.get_state("C001")
         self.assertEqual(state, "waiting_edit")
 
@@ -147,7 +147,7 @@ class TestOcrRejectWords(unittest.TestCase):
         from handlers.command_handler import handle_text
         _create_pending_staging(sm)
         result = _run(handle_text(self.line_svc, "不對", "C001", "U001", "User", "RT001"))
-        self.assertIn("修改記錄", result)
+        self.assertIn("記錄 #", result)
 
 
 class TestOcrDiscard(unittest.TestCase):

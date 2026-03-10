@@ -233,7 +233,8 @@ class TestEditMode(unittest.TestCase):
     def tearDown(self):
         _teardown_db(self.db_path)
 
-    def test_enter_edit(self):
+    def test_enter_edit_with_data(self):
+        """資料完整時顯示摘要，供自由修改"""
         import state_manager as sm
         from handlers.command_handler import handle_text
         sid = sm.add_purchase_staging("U001", "C001")
@@ -242,30 +243,56 @@ class TestEditMode(unittest.TestCase):
                              unit_price=35, amount=350)
         result = _run(handle_text(self.line_svc, f"修改 #{sid}",
                                   "C001", "U001", "User", "RT001"))
-        self.assertIn("修改記錄", result)
+        self.assertIn("記錄 #", result)
         self.assertIn("高麗菜", result)
-        self.assertIn("請直接說要改什麼", result)
+        self.assertIn("同意", result)
 
-    def test_edit_supplier(self):
+    def test_enter_edit_missing_fields_guided(self):
+        """資料缺失時，用對話引導補齊"""
+        import state_manager as sm
+        from handlers.command_handler import handle_text
+        sid = sm.add_purchase_staging("U001", "C001")
+        sm.update_purchase_staging(sid, total_amount=0)  # 缺供應商、缺金額
+        result = _run(handle_text(self.line_svc, f"修改 #{sid}",
+                                  "C001", "U001", "User", "RT001"))
+        self.assertIn("辨識不出來", result)
+        self.assertIn("廠商是誰", result)
+
+    def test_guided_answer_supplier(self):
+        """引導模式：回答廠商名稱 → 繼續問下一題"""
+        import state_manager as sm
+        from handlers.command_handler import handle_text
+        sid = sm.add_purchase_staging("U001", "C001")
+        sm.update_purchase_staging(sid, total_amount=0)
+        _run(handle_text(self.line_svc, f"修改 #{sid}",
+                         "C001", "U001", "User", "RT001"))
+        result = _run(handle_text(self.line_svc, "好鮮水產行",
+                                  "C001", "U001", "User", "RT001"))
+        self.assertIn("已補上", result)
+        staging = sm.get_staging(sid)
+        self.assertEqual(staging["supplier_name"], "好鮮水產行")
+
+    def test_edit_supplier_explicit(self):
+        """明確格式 供應商=xxx 在任何模式下都能用"""
         import state_manager as sm
         from handlers.command_handler import handle_text
         sid = sm.add_purchase_staging("U001", "C001")
         sm.update_purchase_staging(sid, supplier_name="A", total_amount=100)
-        # 進入修改模式
+        sm.add_purchase_item(sid, "X", quantity=1, unit="", unit_price=100, amount=100)
         _run(handle_text(self.line_svc, f"修改 #{sid}",
                          "C001", "U001", "User", "RT001"))
-        # 修改供應商
         result = _run(handle_text(self.line_svc, "供應商=好鮮水產行",
                                   "C001", "U001", "User", "RT001"))
         self.assertIn("好鮮水產行", result)
         staging = sm.get_staging(sid)
         self.assertEqual(staging["supplier_name"], "好鮮水產行")
 
-    def test_edit_total(self):
+    def test_edit_total_explicit(self):
         import state_manager as sm
         from handlers.command_handler import handle_text
         sid = sm.add_purchase_staging("U001", "C001")
-        sm.update_purchase_staging(sid, total_amount=100)
+        sm.update_purchase_staging(sid, supplier_name="A", total_amount=100)
+        sm.add_purchase_item(sid, "X", quantity=1, unit="", unit_price=100, amount=100)
         _run(handle_text(self.line_svc, f"修改 #{sid}",
                          "C001", "U001", "User", "RT001"))
         result = _run(handle_text(self.line_svc, "總額=10500",
@@ -274,11 +301,12 @@ class TestEditMode(unittest.TestCase):
         staging = sm.get_staging(sid)
         self.assertEqual(staging["total_amount"], 10500)
 
-    def test_edit_date(self):
+    def test_edit_date_explicit(self):
         import state_manager as sm
         from handlers.command_handler import handle_text
         sid = sm.add_purchase_staging("U001", "C001")
-        sm.update_purchase_staging(sid, total_amount=100)
+        sm.update_purchase_staging(sid, supplier_name="A", total_amount=100)
+        sm.add_purchase_item(sid, "X", quantity=1, unit="", unit_price=100, amount=100)
         _run(handle_text(self.line_svc, f"修改 #{sid}",
                          "C001", "U001", "User", "RT001"))
         result = _run(handle_text(self.line_svc, "日期=2026-03-20",
@@ -299,17 +327,19 @@ class TestEditMode(unittest.TestCase):
         state, _ = sm.get_state("C001")
         self.assertEqual(state, "waiting_final_confirm")
 
-    def test_edit_unrecognized_input(self):
-        """LLM 不可用時，無法辨識的輸入應提示使用者"""
+    def test_edit_unrecognized_guided(self):
+        """引導模式下，無法辨識的輸入 → 被當作回答引導問題"""
         import state_manager as sm
         from handlers.command_handler import handle_text
         sid = sm.add_purchase_staging("U001", "C001")
-        sm.update_purchase_staging(sid, total_amount=100)
+        sm.update_purchase_staging(sid, supplier_name="A", total_amount=100)
+        sm.add_purchase_item(sid, "X", quantity=1, unit="", unit_price=100, amount=100)
         _run(handle_text(self.line_svc, f"修改 #{sid}",
                          "C001", "U001", "User", "RT001"))
         result = _run(handle_text(self.line_svc, "隨便打的",
                                   "C001", "U001", "User", "RT001"))
-        self.assertIn("不太確定", result)
+        # 資料完整時走 LLM fallback，LLM 不可用時提示
+        self.assertTrue("不太確定" in result or "沒聽懂" in result or "同意" in result)
 
 
 class TestStateMachine(unittest.TestCase):

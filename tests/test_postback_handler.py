@@ -826,10 +826,12 @@ class TestQuickActions(unittest.TestCase):
         _run(handle_postback(
             self.line_svc, "action=edit&id=42",
             "G001", "U001", "RT001"))
-        mock_cmd_sm.set_state.assert_called_once_with(
-            "G001", "waiting_edit", {"staging_id": 42})
+        # set_state now includes missing_fields and current_asking
+        call_args = mock_cmd_sm.set_state.call_args
+        self.assertEqual(call_args[0][0], "G001")
+        self.assertEqual(call_args[0][1], "waiting_edit")
+        self.assertEqual(call_args[0][2]["staging_id"], 42)
         msg = self.line_svc.reply.call_args[0][1]
-        self.assertIn("修改", msg)
         self.assertIn("#42", msg)
 
     @patch("handlers.postback_handler.sm")
