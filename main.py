@@ -1,4 +1,4 @@
-"""小膳 Bot — 團膳公司內帳系統 LINE Bot (FastAPI)"""
+"""小膳 Bot — 團膳公司內帳系統 LINE Bot (FastAPI) v3.0 多租戶版"""
 
 import asyncio
 import base64
@@ -21,6 +21,10 @@ load_dotenv(os.path.join(os.path.dirname(__file__), "config", ".env"))
 
 import state_manager as sm
 from services.line_service import LineService
+from services.company_service import (
+    init_companies, resolve_company, get_channel_secret,
+    get_access_token, get_all_active_companies,
+)
 from task_manager import (
     HeartbeatScheduler,
     MarketSyncScheduler,
@@ -44,7 +48,6 @@ logging.basicConfig(
 logger = logging.getLogger("shanbot")
 
 # 全域
-CHANNEL_SECRET = os.environ.get("LINE_CHANNEL_SECRET", "")
 PORT = int(os.environ.get("PORT", 8025))
 
 line_service: LineService | None = None
@@ -53,11 +56,12 @@ ADMIN_LINE_USER_ID = ""
 ALLOWED_GROUPS: set[str] = set()
 
 
-def verify_signature(body: bytes, signature: str) -> bool:
-    """HMAC-SHA256 簽名驗證"""
-    if not CHANNEL_SECRET:
+def verify_signature(body: bytes, signature: str, channel_id: str = None) -> bool:
+    """HMAC-SHA256 簽名驗證 — 多租戶版，用對應 Channel 的 Secret"""
+    secret = get_channel_secret(channel_id) if channel_id else os.environ.get("LINE_CHANNEL_SECRET", "")
+    if not secret:
         return True  # 開發模式
-    mac = hmac.new(CHANNEL_SECRET.encode("utf-8"), body, hashlib.sha256)
+    mac = hmac.new(secret.encode("utf-8"), body, hashlib.sha256)
     expected = base64.b64encode(mac.digest()).decode("utf-8")
     return hmac.compare_digest(expected, signature)
 
@@ -71,16 +75,20 @@ async def lifespan(app: FastAPI):
     sm.init_db()
     logger.info("Database initialized")
 
+    # 初始化多租戶公司設定
+    init_companies()
+    logger.info("Multi-tenant companies initialized")
+
     # 載入設定
     ADMIN_LINE_USER_ID = sm.get_config("admin_user_id", "")
     groups_json = sm.get_config("allowed_groups", "[]")
     ALLOWED_GROUPS = set(json.loads(groups_json))
 
-    # GDrive 資料夾結構
+    # GDrive 資料夾結構（多公司）
     try:
-        from services.gdrive_service import init_folder_structure
-        month_path = init_folder_structure()
-        logger.info(f"GDrive folder ready: {month_path}")
+        from services.gdrive_service import init_all_company_folders
+        init_all_company_folders()
+        logger.info("GDrive multi-company folders ready")
     except Exception as e:
         logger.warning(f"GDrive init skipped: {e}")
 
@@ -105,8 +113,12 @@ async def lifespan(app: FastAPI):
     api_guard = ExternalAPIGuardScheduler()
     api_guard.start()
 
-    logger.info(f"小膳 Bot started on port {PORT}")
-    logger.info(f"LINE Webhook URL: https://shanbot.kuangshin.tw/webhook")
+    companies = get_all_active_companies()
+    logger.info(f"小膳 Bot v3.0 started on port {PORT}")
+    logger.info(f"Multi-tenant: {len(companies)} companies")
+    for c in companies:
+        has_cred = "✅" if c.get("line_channel_id") else "⏳"
+        logger.info(f"  {has_cred} {c['short_name']} ({c['full_name']})")
     logger.info(f"Admin: {'set' if ADMIN_LINE_USER_ID else 'not set'}")
     logger.info(f"Groups: {len(ALLOWED_GROUPS)}")
 
@@ -120,7 +132,7 @@ async def lifespan(app: FastAPI):
     logger.info("小膳 Bot stopped")
 
 
-app = FastAPI(title="ShanBot", version="2.4.0", lifespan=lifespan)
+app = FastAPI(title="ShanBot", version="3.0.0", lifespan=lifespan)
 
 # 靜態檔案路由 — 生成的菜色圖片
 IMAGES_DIR = os.path.join(os.path.dirname(__file__), "data", "images")
@@ -130,30 +142,71 @@ app.mount("/images", StaticFiles(directory=IMAGES_DIR), name="images")
 
 @app.post("/webhook")
 async def webhook(request: Request):
-    """LINE Webhook 入口"""
+    """LINE Webhook 入口 — 統一入口，由 Header/Event 判斷 Channel"""
     body = await request.body()
     signature = request.headers.get("X-Line-Signature", "")
 
-    if not verify_signature(body, signature):
-        return JSONResponse({"error": "Invalid signature"}, status_code=403)
-
+    # 嘗試從 event 解析 Channel ID（LINE webhook 的 destination 欄位）
     try:
         payload = json.loads(body)
     except json.JSONDecodeError:
         return JSONResponse({"error": "Invalid JSON"}, status_code=400)
 
+    # LINE webhook payload 帶有 destination（= bot 的 user ID，可用來辨識 Channel）
+    destination = payload.get("destination", "")
+
+    # 嘗試用 destination 或 events 中的資訊判斷 Channel
+    channel_id = _resolve_channel_id(payload, destination)
+
+    # 簽名驗證（用對應 Channel 的 Secret）
+    if not verify_signature(body, signature, channel_id):
+        return JSONResponse({"error": "Invalid signature"}, status_code=403)
+
+    # 解析公司
+    company = resolve_company(channel_id=channel_id)
+    company_id = company["id"]
+
+    # 設定 LINE Service 的 context token
+    if line_service:
+        token = get_access_token(company_id=company_id)
+        line_service.set_context_token(token)
+
     events = payload.get("events", [])
     if events:
-        logger.info(f"Webhook received {len(events)} event(s): "
+        logger.info(f"Webhook [{company['short_name']}] received {len(events)} event(s): "
                      f"{[e.get('type','?') for e in events]}")
     for event in events:
-        asyncio.create_task(_process_event(event))
+        asyncio.create_task(_process_event(event, company_id))
 
     return {"status": "ok"}
 
 
-async def _process_event(event: dict):
-    """處理單一事件（非阻塞）"""
+def _resolve_channel_id(payload: dict, destination: str) -> str:
+    """從 webhook payload 解析 Channel ID
+
+    LINE webhook 不直接帶 Channel ID，但帶 destination（bot user ID）。
+    我們在 companies 表中存的是 Channel ID，需要做映射。
+    如果 destination 無法匹配，fallback 到預設公司。
+    """
+    # 方法 1: 嘗試用 destination 在 companies 中查找
+    # （需要先在 companies 中記錄 bot_user_id，或用 channel_id 映射）
+    # 目前簡化處理：直接用 destination 作為 channel_id 查找
+    if destination:
+        company = resolve_company(channel_id=destination)
+        if company.get("line_channel_id") == destination:
+            return destination
+
+    # 方法 2: 如果 events 中有 source，嘗試從 source 判斷
+    events = payload.get("events", [])
+    if events:
+        source = events[0].get("source", {})
+        # LINE 不在 event 中帶 channel_id，所以這裡只能 fallback
+
+    return destination or ""
+
+
+async def _process_event(event: dict, company_id: int = 1):
+    """處理單一事件（非阻塞）— 多租戶版"""
     global ADMIN_LINE_USER_ID, ALLOWED_GROUPS
 
     try:
@@ -185,39 +238,43 @@ async def _process_event(event: dict):
             if msg_type == "text":
                 text = msg.get("text", "").strip()
                 if text:
-                    await _handle_text(text, group_id, user_id, reply_token)
+                    await _handle_text(text, group_id, user_id, reply_token, company_id)
 
             elif msg_type == "image":
                 msg_id = msg.get("id", "")
-                await _handle_image(msg_id, group_id, user_id, reply_token)
+                await _handle_image(msg_id, group_id, user_id, reply_token, company_id)
 
             elif msg_type == "file":
                 msg_id = msg.get("id", "")
                 filename = msg.get("fileName", "unknown")
-                await _handle_file(msg_id, filename, group_id, user_id, reply_token)
+                await _handle_file(msg_id, filename, group_id, user_id, reply_token, company_id)
 
             elif msg_type == "sticker":
-                await _handle_sticker(group_id, user_id, reply_token)
+                await _handle_sticker(group_id, user_id, reply_token, company_id)
 
         elif event_type == "postback":
             postback_data = event.get("postback", {}).get("data", "")
             if postback_data:
-                await _handle_postback(postback_data, group_id, user_id, reply_token)
+                await _handle_postback(postback_data, group_id, user_id, reply_token, company_id)
 
         elif event_type == "join":
             if line_service:
+                company = resolve_company(channel_id="")
+                name = company.get("short_name", "小膳")
                 line_service.push(group_id,
-                    "大家好！我是小膳 🍳\n"
+                    f"大家好！我是{name}的小膳 🍳\n"
                     "我可以幫忙管理每日採購記錄、比價、出報表。\n"
                     "上傳收據照片，我就會自動辨識幫你記帳！\n"
-                    "輸入「help」看完整指令。"
+                    "輸入「help」看完整指令。",
+                    company_id=company_id,
                 )
 
     except Exception as e:
         logger.error(f"Event processing error: {e}", exc_info=True)
 
 
-async def _handle_text(text: str, group_id: str, user_id: str, reply_token: str):
+async def _handle_text(text: str, group_id: str, user_id: str,
+                       reply_token: str, company_id: int = 1):
     """處理文字訊息"""
     from handlers.command_handler import handle_text
 
@@ -228,13 +285,15 @@ async def _handle_text(text: str, group_id: str, user_id: str, reply_token: str)
             user_name = profile.get("displayName", "")
 
     reply = await handle_text(
-        line_service, text, group_id, user_id, user_name, reply_token
+        line_service, text, group_id, user_id, user_name, reply_token,
+        company_id=company_id,
     )
     if reply and line_service:
         line_service.reply(reply_token, reply)
 
 
-async def _handle_image(message_id: str, group_id: str, user_id: str, reply_token: str):
+async def _handle_image(message_id: str, group_id: str, user_id: str,
+                        reply_token: str, company_id: int = 1):
     """處理圖片上傳 — 根據對話狀態路由到菜單照片或收據 OCR"""
     # 檢查是否在等待菜色照片
     state, state_data = sm.get_state(group_id)
@@ -277,18 +336,21 @@ async def _handle_image(message_id: str, group_id: str, user_id: str, reply_toke
 
     from handlers.photo_handler import handle_photo_received
     reply = await handle_photo_received(
-        line_service, message_id, group_id, user_id, reply_token
+        line_service, message_id, group_id, user_id, reply_token,
+        company_id=company_id,
     )
     if reply and line_service:
         line_service.reply(reply_token, reply)
 
 
-async def _handle_postback(data_str: str, group_id: str, user_id: str, reply_token: str):
+async def _handle_postback(data_str: str, group_id: str, user_id: str,
+                           reply_token: str, company_id: int = 1):
     """處理 Postback 事件（六宮格選單 + 子動作）"""
     from handlers.postback_handler import handle_postback
 
     try:
-        await handle_postback(line_service, data_str, group_id, user_id, reply_token)
+        await handle_postback(line_service, data_str, group_id, user_id, reply_token,
+                              company_id=company_id)
     except Exception as e:
         logger.error(f"Postback error: {e}", exc_info=True)
         if line_service:
@@ -296,18 +358,20 @@ async def _handle_postback(data_str: str, group_id: str, user_id: str, reply_tok
 
 
 async def _handle_file(message_id: str, filename: str, group_id: str,
-                       user_id: str, reply_token: str):
+                       user_id: str, reply_token: str, company_id: int = 1):
     """處理檔案上傳（Excel/PDF 自動分類歸檔）"""
     from handlers.file_handler import handle_file_received
 
     reply = await handle_file_received(
-        line_service, message_id, filename, group_id, user_id, reply_token
+        line_service, message_id, filename, group_id, user_id, reply_token,
+        company_id=company_id,
     )
     if reply and line_service:
         line_service.reply(reply_token, reply)
 
 
-async def _handle_sticker(group_id: str, user_id: str, reply_token: str):
+async def _handle_sticker(group_id: str, user_id: str, reply_token: str,
+                          company_id: int = 1):
     """貼圖訊息 — 僅在等待 OCR 確認時視為確認"""
     state, state_data = sm.get_state(group_id)
     if state == "waiting_ocr_confirm":
@@ -315,7 +379,8 @@ async def _handle_sticker(group_id: str, user_id: str, reply_token: str):
         if staging_id:
             from handlers.command_handler import _confirm_staging
             sm.clear_state(group_id)
-            reply = await _confirm_staging(staging_id, group_id)
+            reply = await _confirm_staging(staging_id, group_id,
+                                           company_id=company_id)
             if reply and line_service:
                 line_service.reply(reply_token, reply)
 
@@ -327,11 +392,16 @@ async def health():
     """健康檢查（含 webhook + 外部 API 狀態）"""
     counts = sm.get_table_counts()
     stats = sm.get_staging_stats()
+    companies = get_all_active_companies()
     return {
         "status": "ok",
         "bot": "shanbot",
-        "version": "2.5.0",
+        "version": "3.0.0",
         "port": PORT,
+        "multi_tenant": {
+            "companies": len(companies),
+            "with_credentials": sum(1 for c in companies if c.get("line_channel_id")),
+        },
         "admin_set": bool(ADMIN_LINE_USER_ID),
         "groups": len(ALLOWED_GROUPS),
         "tables": counts,
@@ -344,7 +414,6 @@ async def health():
 @app.post("/heartbeat")
 async def manual_heartbeat():
     """手動觸發心跳報告"""
-    # 會在 task_manager 裡實作
     return {"status": "triggered"}
 
 
@@ -354,6 +423,19 @@ async def manual_market_sync():
     from services.market_service import sync_all_market_data
     result = await sync_all_market_data()
     return {"status": "ok", "result": result}
+
+
+@app.post("/reload-companies")
+async def reload_companies():
+    """重新載入公司設定（更新 LINE 憑證後呼叫）"""
+    from services.company_service import reload_companies as _reload
+    _reload()
+    companies = get_all_active_companies()
+    return {
+        "status": "ok",
+        "companies": len(companies),
+        "with_credentials": sum(1 for c in companies if c.get("line_channel_id")),
+    }
 
 
 if __name__ == "__main__":

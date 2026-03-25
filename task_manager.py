@@ -59,34 +59,55 @@ class HeartbeatScheduler(BaseScheduler):
                 await self._execute()
 
     async def _execute(self):
+        """多租戶心跳：彙整所有公司 + 推送到 primary group"""
         try:
             import state_manager as sm
-            stats = sm.get_staging_stats()
-            pending = stats.get("pending", 0)
-            confirmed = stats.get("confirmed", 0)
-            total_amount = stats.get("total_amount", 0)
 
             lines = ["📊 小膳每日心跳報告", f"🕐 {datetime.now().strftime('%Y-%m-%d %H:%M')}", ""]
 
-            if pending:
-                lines.append(f"⚠️ 待確認採購單：{pending} 筆")
-            if confirmed:
-                lines.append(f"✅ 已確認：{confirmed} 筆（合計 ${total_amount:,.0f}）")
-            if not pending and not confirmed:
+            # 按公司統計
+            companies = sm.get_all_companies()
+            total_pending = 0
+            total_confirmed = 0
+            total_amount_all = 0
+
+            for company in companies:
+                cid = company["id"]
+                stats = sm.get_staging_stats(company_id=cid)
+                pending = stats.get("pending", 0) or 0
+                confirmed = stats.get("confirmed", 0) or 0
+                amount = stats.get("total_amount", 0) or 0
+
+                if pending or confirmed:
+                    lines.append(f"【{company['short_name']}】")
+                    if pending:
+                        lines.append(f"  ⚠️ 待確認：{pending} 筆")
+                    if confirmed:
+                        lines.append(f"  ✅ 已確認：{confirmed} 筆（${amount:,.0f}）")
+                    total_pending += pending
+                    total_confirmed += confirmed
+                    total_amount_all += amount
+
+            if not total_pending and not total_confirmed:
                 lines.append("📭 今日無採購記錄")
+            else:
+                lines.append(f"\n📋 合計：{total_pending} 待確認 / {total_confirmed} 已確認 / ${total_amount_all:,.0f}")
 
             # 月底提醒
             now = datetime.now()
             if now.day >= 25:
-                month_stats = sm.get_staging_stats(now.strftime("%Y-%m"))
-                month_pending = month_stats.get("pending", 0)
+                ym = now.strftime("%Y-%m")
+                month_pending = 0
+                for company in companies:
+                    ms = sm.get_staging_stats(ym, company_id=company["id"])
+                    month_pending += (ms.get("pending", 0) or 0)
                 if month_pending:
                     lines.append(f"\n🔔 月底提醒：本月還有 {month_pending} 筆待確認！")
 
             report = "\n".join(lines)
             if self.line_service:
                 self.line_service.push(self.target_chat_id, report)
-            logger.info("Heartbeat sent")
+            logger.info("Heartbeat sent (multi-tenant)")
         except Exception as e:
             logger.error(f"Heartbeat error: {e}", exc_info=True)
 
@@ -144,6 +165,8 @@ class MonthlySummaryScheduler(BaseScheduler):
     async def _execute(self):
         try:
             import state_manager as sm
+            from services import flex_builder as fb
+
             now = datetime.now()
             last_month = (now.replace(day=1) - timedelta(days=1))
             ym = last_month.strftime("%Y-%m")
@@ -155,20 +178,36 @@ class MonthlySummaryScheduler(BaseScheduler):
             amount = stats.get("total_amount", 0)
             tax = stats.get("total_tax", 0)
 
-            lines = [
-                f"📋 {ym} 月度彙整",
-                f"📊 採購記錄：{total} 筆（確認 {confirmed} / 待處理 {pending}）",
-                f"💰 總金額：${amount:,.0f}",
-                f"🧾 進項稅額：${tax:,.0f}",
-            ]
-            if pending:
-                lines.append(f"\n⚠️ 還有 {pending} 筆未確認，請儘速處理！")
-            else:
-                lines.append("\n✅ 全部已確認。可執行「匯出」生成稅務報表。")
+            mc = sm.get_monthly_cost(ym)
+            summary = {
+                "total_count": total,
+                "total_amount": amount,
+                "total_tax": tax,
+                "pending": pending,
+                "invoice_count": mc.get("invoice_count", 0) if mc else 0,
+                "receipt_count": mc.get("receipt_count", 0) if mc else 0,
+            }
 
-            report = "\n".join(lines)
-            if self.line_service:
-                self.line_service.push(self.target_chat_id, report)
+            # 檢查是否已有確認記錄
+            existing = sm.get_report_confirmation(ym, "monthly")
+            if existing:
+                cid = existing["id"]
+            else:
+                cid = sm.upsert_report_confirmation(
+                    ym, "monthly", summary_data=summary,
+                )
+
+            if self.line_service and self.target_chat_id:
+                # 推送 Flex 確認卡片（一則 push）
+                flex = fb.build_report_confirmation_flex(
+                    cid, ym, "monthly", summary,
+                )
+                self.line_service.push_flex(
+                    self.target_chat_id,
+                    f"📋 {ym} 月度彙整 — 請確認",
+                    flex,
+                )
+
             logger.info(f"Monthly summary sent for {ym}")
         except Exception as e:
             logger.error(f"Monthly summary error: {e}", exc_info=True)

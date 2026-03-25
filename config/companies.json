@@ -1,0 +1,75 @@
+{
+  "companies": [
+    {
+      "id": 1,
+      "short_name": "福利社",
+      "full_name": "升鼎商行",
+      "tax_id": "81410187",
+      "tax_reg_no": "",
+      "address": "臺南市安定區安加里219-9號1樓",
+      "owner": "尤聖樺",
+      "line_channel_id": "",
+      "line_channel_secret": "",
+      "line_channel_access_token": "",
+      "gdrive_folder": "福利社",
+      "is_default": true
+    },
+    {
+      "id": 2,
+      "short_name": "王凱",
+      "full_name": "王凱食品有限公司",
+      "tax_id": "90438334",
+      "tax_reg_no": "",
+      "address": "高雄市苓雅區中山二路489號8樓之2",
+      "owner": "李佳芸",
+      "line_channel_id": "",
+      "line_channel_secret": "",
+      "line_channel_access_token": "",
+      "gdrive_folder": "王凱",
+      "is_default": false
+    },
+    {
+      "id": 3,
+      "short_name": "台達2廠",
+      "full_name": "升鼎商行",
+      "tax_id": "81410187",
+      "tax_reg_no": "",
+      "address": "臺南市安定區安加里219-9號1樓",
+      "owner": "尤聖樺",
+      "line_channel_id": "",
+      "line_channel_secret": "",
+      "line_channel_access_token": "",
+      "gdrive_folder": "台達2廠",
+      "is_default": false
+    },
+    {
+      "id": 4,
+      "short_name": "富燚",
+      "full_name": "富燚商行",
+      "tax_id": "00281384",
+      "tax_reg_no": "",
+      "address": "",
+      "owner": "陳建男",
+      "line_channel_id": "",
+      "line_channel_secret": "",
+      "line_channel_access_token": "",
+      "gdrive_folder": "富燚",
+      "is_default": false
+    },
+    {
+      "id": 5,
+      "short_name": "台達1廠",
+      "full_name": "升鼎商行",
+      "tax_id": "81410187",
+      "tax_reg_no": "",
+      "address": "臺南市安定區安加里219-9號1樓",
+      "owner": "尤聖樺",
+      "line_channel_id": "",
+      "line_channel_secret": "",
+      "line_channel_access_token": "",
+      "gdrive_folder": "台達1廠",
+      "is_default": false
+    }
+  ],
+  "_note": "LINE 憑證待小魚從 LINE Developers Console 取得後填入。每家需要: channel_id, channel_secret, channel_access_token"
+}

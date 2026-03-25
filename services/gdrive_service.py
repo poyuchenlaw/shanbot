@@ -1,4 +1,4 @@
-"""Google Drive 本地同步檔案操作（v2.2 — 結構化資料夾管理 + 掛載 fallback）"""
+"""Google Drive 本地同步檔案操作（v3.0 — 多公司資料夾 + 掛載 fallback）"""
 
 import json
 import logging
@@ -10,9 +10,10 @@ from pathlib import Path
 
 logger = logging.getLogger("shanbot.gdrive")
 
-_GDRIVE_PRIMARY = os.environ.get(
+_GDRIVE_BASE = os.environ.get(
     "GDRIVE_LOCAL", "/mnt/h/我的雲端硬碟/小魚資料/團膳公司資料"
 )
+_GDRIVE_PRIMARY = _GDRIVE_BASE  # 相容舊 API
 _GDRIVE_STAGING = "/home/simon/shanbot/data/gdrive_staging"
 
 # --- 掛載可用性檢查 ---
@@ -61,9 +62,78 @@ def is_using_staging() -> bool:
     """供外部查詢是否正在使用暫存路徑"""
     return _USING_STAGING
 
+
+def get_company_base_path(company_id: int = None) -> str:
+    """取得指定公司的 GDrive 基礎路徑
+
+    多租戶：/mnt/h/.../團膳公司資料/{公司簡稱}/
+    單租戶（相容）：/mnt/h/.../團膳公司資料/
+    """
+    if company_id is None or company_id == 0:
+        return GDRIVE_LOCAL
+
+    try:
+        from services.company_service import get_gdrive_folder
+        folder = get_gdrive_folder(company_id)
+        if folder:
+            return os.path.join(GDRIVE_LOCAL, folder)
+    except ImportError:
+        pass
+
+    return GDRIVE_LOCAL
+
+
+def init_all_company_folders():
+    """啟動時為所有公司建立資料夾結構"""
+    global GDRIVE_LOCAL, _USING_STAGING
+
+    # 重新檢查掛載
+    new_path = _resolve_gdrive_path()
+    if new_path != GDRIVE_LOCAL:
+        logger.info(f"[GDrive] 路徑切換: {GDRIVE_LOCAL} → {new_path}")
+        GDRIVE_LOCAL = new_path
+
+    try:
+        from services.company_service import get_all_active_companies
+        companies = get_all_active_companies()
+    except ImportError:
+        companies = []
+
+    if not companies:
+        # Fallback: 單租戶模式
+        init_folder_structure()
+        return
+
+    for company in companies:
+        folder = company.get("gdrive_folder", "")
+        if not folder:
+            continue
+        company_path = os.path.join(GDRIVE_LOCAL, folder)
+        os.makedirs(company_path, exist_ok=True)
+
+        # 建立當月標準子目錄
+        year_month = datetime.now().strftime("%Y-%m")
+        _init_company_month_structure(company_path, year_month)
+        logger.info(f"[GDrive] Company folder ready: {company_path}")
+
+
+def _init_company_month_structure(company_base: str, year_month: str):
+    """為單一公司建立年/月/類別結構"""
+    parts = year_month.split("-")
+    year = parts[0]
+    month = f"{int(parts[1]):02d}月"
+    year_path = os.path.join(company_base, year)
+    month_path = os.path.join(year_path, month)
+
+    for folder in MONTHLY_FOLDERS:
+        os.makedirs(os.path.join(month_path, folder), exist_ok=True)
+    for folder in ANNUAL_FOLDERS:
+        os.makedirs(os.path.join(year_path, folder), exist_ok=True)
+
+
 # 每月子資料夾名稱
 MONTHLY_FOLDERS = [
-    "收據憑證", "採購單據", "月報表", "稅務匯出", "菜單企劃",
+    "收據憑證", "待確認", "採購單據", "月報表", "稅務匯出", "菜單企劃",
     "薪資表", "租約與合約", "會計資料", "財務報表",
 ]
 
@@ -127,17 +197,18 @@ def get_full_path(relative_path: str) -> str:
 
 # === v2.1 結構化資料夾管理 ===
 
-def _year_month_path(year_month: str) -> tuple[str, str]:
+def _year_month_path(year_month: str, base_path: str = None) -> tuple[str, str]:
     """解析 year_month (如 '2026-02') → (年路徑, 月路徑)"""
+    base = base_path or GDRIVE_LOCAL
     parts = year_month.split("-")
     year = parts[0]
     month = f"{int(parts[1]):02d}月"
-    year_path = os.path.join(GDRIVE_LOCAL, year)
+    year_path = os.path.join(base, year)
     month_path = os.path.join(year_path, month)
     return year_path, month_path
 
 
-def init_folder_structure(year_month: str | None = None) -> str:
+def init_folder_structure(year_month: str | None = None, company_id: int = None) -> str:
     """建立年/月/類別資料夾結構，回傳月路徑
 
     啟動時會重新檢查 GDrive 掛載狀態，若掛載恢復則自動切回真實路徑。
@@ -159,7 +230,8 @@ def init_folder_structure(year_month: str | None = None) -> str:
     if not year_month:
         year_month = datetime.now().strftime("%Y-%m")
 
-    year_path, month_path = _year_month_path(year_month)
+    base = get_company_base_path(company_id)
+    year_path, month_path = _year_month_path(year_month, base_path=base)
 
     # 月份子資料夾
     for folder in MONTHLY_FOLDERS:
@@ -179,7 +251,8 @@ def init_folder_structure(year_month: str | None = None) -> str:
                     "================================\n\n"
                     "📁 資料夾結構：\n"
                     "  {年}/{月}月/\n"
-                    "    ├── 收據憑證/{供應商名稱}/    ← 按供應商分類\n"
+                    "    ├── 收據憑證/{供應商名稱}/    ← 已確認，按供應商分類\n"
+                    "    ├── 待確認/                   ← 尚未確認的單據暫存區\n"
                     "    ├── 採購單據/\n"
                     "    ├── 月報表/\n"
                     "    ├── 稅務匯出/\n"
@@ -215,13 +288,15 @@ async def upload_receipt(
     local_path: str,
     year_month: str | None = None,
     supplier: str = "unknown",
+    company_id: int = None,
 ) -> str | None:
-    """上傳收據到 收據憑證/ 資料夾，回傳 GDrive 相對路徑"""
+    """上傳收據到 待確認/ 資料夾，確認後由 archive_receipt 搬至 收據憑證/"""
     if not year_month:
         year_month = datetime.now().strftime("%Y-%m")
 
-    _, month_path = _year_month_path(year_month)
-    dest_dir = os.path.join(month_path, "收據憑證")
+    base = get_company_base_path(company_id)
+    _, month_path = _year_month_path(year_month, base_path=base)
+    dest_dir = os.path.join(month_path, "待確認")
     os.makedirs(dest_dir, exist_ok=True)
 
     # 檔名：原始檔名加上供應商前綴
@@ -234,7 +309,7 @@ async def upload_receipt(
         shutil.copy2(local_path, dest_path)
         # 計算相對路徑
         rel = os.path.relpath(dest_path, GDRIVE_LOCAL)
-        logger.info(f"Receipt uploaded: {local_path} → {dest_path}")
+        logger.info(f"Receipt uploaded to pending: {local_path} → {dest_path}")
         return rel
     except Exception as e:
         logger.error(f"upload_receipt failed: {e}")
@@ -245,6 +320,7 @@ async def upload_export(
     local_path: str,
     export_type: str,
     period: str,
+    company_id: int = None,
 ) -> str | None:
     """上傳匯出檔案到對應類別資料夾，回傳 GDrive 相對路徑
 
@@ -260,18 +336,18 @@ async def upload_export(
         "menu": "菜單企劃",
     }
 
+    base = get_company_base_path(company_id)
+
     if export_type == "annual":
-        # 年度報表放年度資料夾下
         year = period[:4]
-        dest_dir = os.path.join(GDRIVE_LOCAL, year, "年度報表")
+        dest_dir = os.path.join(base, year, "年度報表")
     elif export_type == "price_compare":
         year = period[:4]
-        dest_dir = os.path.join(GDRIVE_LOCAL, year, "食材價格對照")
+        dest_dir = os.path.join(base, year, "食材價格對照")
     else:
-        # 月份類別
         folder_name = type_folder_map.get(export_type, "月報表")
         year_month = period[:7] if len(period) >= 7 else period
-        _, month_path = _year_month_path(year_month)
+        _, month_path = _year_month_path(year_month, base_path=base)
         dest_dir = os.path.join(month_path, folder_name)
 
     os.makedirs(dest_dir, exist_ok=True)
@@ -294,8 +370,10 @@ async def archive_receipt(
     total_amount: float,
     staging_id: int,
     ocr_summary: dict | None = None,
+    pending_gdrive_path: str | None = None,
+    company_id: int = None,
 ) -> dict:
-    """確認後的正式歸檔：重命名 + 存 GDrive + 寫 INDEX.csv
+    """確認後的正式歸檔：重命名 + 存 GDrive + 寫 INDEX.csv + 清理待確認
 
     Args:
         local_path: 本地圖片路徑
@@ -304,6 +382,7 @@ async def archive_receipt(
         total_amount: 總金額
         staging_id: 暫存記錄 ID
         ocr_summary: OCR 摘要（可選），含 items / invoice_number / subtotal / tax_amount
+        pending_gdrive_path: 待確認資料夾中的相對路徑，歸檔後自動刪除
 
     Returns:
         {"gdrive_path": "...", "filename": "...", "index_row": {...}}
@@ -326,9 +405,10 @@ async def archive_receipt(
     ext = os.path.splitext(local_path)[1] or ".jpg"
     new_filename = f"{date_prefix}_{safe_supplier}_{amount_str}_#{staging_id}{ext}"
 
-    # 2. 計算目標路徑：{年}/{月}月/收據憑證/{供應商}/
+    # 2. 計算目標路徑：{公司}/{年}/{月}月/收據憑證/{供應商}/
     year_month = purchase_date[:7] if purchase_date and len(purchase_date) >= 7 else datetime.now().strftime("%Y-%m")
-    _, month_path = _year_month_path(year_month)
+    base = get_company_base_path(company_id)
+    _, month_path = _year_month_path(year_month, base_path=base)
     dest_dir = os.path.join(month_path, "收據憑證", safe_supplier)
     os.makedirs(dest_dir, exist_ok=True)
 
@@ -367,6 +447,10 @@ async def archive_receipt(
         update_master_index(year_month)
     except Exception as e:
         logger.warning(f"Master index update failed: {e}")
+
+    # 6. 清理待確認資料夾中的暫存檔
+    if pending_gdrive_path:
+        _cleanup_pending_receipt(pending_gdrive_path)
 
     return {
         "gdrive_path": rel_path,
@@ -583,9 +667,11 @@ async def upload_financial_doc(
     year_month: str,
     category: str,
     filename: str | None = None,
+    company_id: int = None,
 ) -> str | None:
     """上傳財務文件到對應分類的月度子資料夾，回傳 GDrive 相對路徑"""
-    _, month_path = _year_month_path(year_month)
+    base = get_company_base_path(company_id)
+    _, month_path = _year_month_path(year_month, base_path=base)
     folder_name = _CATEGORY_FOLDER_MAP.get(category, "會計資料")
     dest_dir = os.path.join(month_path, folder_name)
     os.makedirs(dest_dir, exist_ok=True)
@@ -666,3 +752,60 @@ def get_annual_index(year: str | None = None) -> dict:
             index["total_files"] += len(files)
 
     return index
+
+
+# === 待確認管理 ===
+
+def _cleanup_pending_receipt(pending_gdrive_path: str):
+    """刪除待確認資料夾中的暫存檔（歸檔後清理）"""
+    full_path = os.path.join(GDRIVE_LOCAL, pending_gdrive_path)
+    try:
+        if os.path.isfile(full_path):
+            os.remove(full_path)
+            logger.info(f"Pending receipt cleaned: {full_path}")
+        else:
+            logger.debug(f"Pending receipt not found (already cleaned?): {full_path}")
+    except Exception as e:
+        logger.warning(f"Pending receipt cleanup failed: {full_path} — {e}")
+
+
+def get_pending_receipt_count(year_month: str | None = None) -> int:
+    """計算待確認資料夾中的檔案數量"""
+    if not year_month:
+        year_month = datetime.now().strftime("%Y-%m")
+
+    _, month_path = _year_month_path(year_month)
+    pending_dir = os.path.join(month_path, "待確認")
+
+    if not os.path.isdir(pending_dir):
+        return 0
+
+    count = 0
+    for entry in os.listdir(pending_dir):
+        fp = os.path.join(pending_dir, entry)
+        if os.path.isfile(fp) and not entry.startswith("."):
+            count += 1
+    return count
+
+
+def get_pending_receipt_list(year_month: str | None = None) -> list[dict]:
+    """列出待確認資料夾中的檔案清單"""
+    if not year_month:
+        year_month = datetime.now().strftime("%Y-%m")
+
+    _, month_path = _year_month_path(year_month)
+    pending_dir = os.path.join(month_path, "待確認")
+
+    if not os.path.isdir(pending_dir):
+        return []
+
+    files = []
+    for entry in sorted(os.listdir(pending_dir)):
+        fp = os.path.join(pending_dir, entry)
+        if os.path.isfile(fp) and not entry.startswith("."):
+            files.append({
+                "name": entry,
+                "size": os.path.getsize(fp),
+                "mtime": datetime.fromtimestamp(os.path.getmtime(fp)).isoformat(),
+            })
+    return files

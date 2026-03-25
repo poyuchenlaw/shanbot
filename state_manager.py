@@ -12,6 +12,24 @@ logger = logging.getLogger("shanbot.state")
 DB_PATH = os.environ.get("DB_PATH", os.path.join(os.path.dirname(__file__), "data", "shanbot.db"))
 
 _SCHEMA = """
+-- 0. 公司主檔（多租戶核心）
+CREATE TABLE IF NOT EXISTS companies (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    short_name TEXT UNIQUE NOT NULL,
+    full_name TEXT NOT NULL,
+    tax_id TEXT DEFAULT '',
+    tax_reg_no TEXT DEFAULT '',
+    address TEXT DEFAULT '',
+    owner TEXT DEFAULT '',
+    line_channel_id TEXT DEFAULT '',
+    line_channel_secret TEXT DEFAULT '',
+    line_channel_access_token TEXT DEFAULT '',
+    gdrive_folder TEXT DEFAULT '',
+    is_default INTEGER DEFAULT 0,
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now','localtime'))
+);
+
 -- 1. 食材主檔
 CREATE TABLE IF NOT EXISTS ingredients (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -47,6 +65,7 @@ CREATE TABLE IF NOT EXISTS suppliers (
 -- 3. 採購暫存表
 CREATE TABLE IF NOT EXISTS purchase_staging (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id INTEGER DEFAULT 1 REFERENCES companies(id),
     user_id TEXT,
     chat_id TEXT,
     image_message_id TEXT,
@@ -153,7 +172,8 @@ CREATE TABLE IF NOT EXISTS menu_schedule (
 -- 9. 月度成本結構
 CREATE TABLE IF NOT EXISTS monthly_cost (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    year_month TEXT UNIQUE NOT NULL,
+    company_id INTEGER DEFAULT 1 REFERENCES companies(id),
+    year_month TEXT NOT NULL,
     serving_days INTEGER DEFAULT 22,
     daily_servings INTEGER DEFAULT 0,
     ingredient_total REAL DEFAULT 0,
@@ -181,6 +201,7 @@ CREATE TABLE IF NOT EXISTS config (
 -- 11. 稅務匯出記錄
 CREATE TABLE IF NOT EXISTS tax_exports (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id INTEGER DEFAULT 1 REFERENCES companies(id),
     tax_period TEXT NOT NULL,
     export_type TEXT NOT NULL,
     file_path TEXT NOT NULL,
@@ -206,6 +227,7 @@ CREATE TABLE IF NOT EXISTS account_mapping (
 -- 13. 收入記錄
 CREATE TABLE IF NOT EXISTS income (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id INTEGER DEFAULT 1 REFERENCES companies(id),
     year_month TEXT NOT NULL,
     amount REAL NOT NULL DEFAULT 0,
     description TEXT DEFAULT '',
@@ -225,6 +247,7 @@ CREATE TABLE IF NOT EXISTS conversation_state (
 -- 15. 財務文件
 CREATE TABLE IF NOT EXISTS financial_documents (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id INTEGER DEFAULT 1 REFERENCES companies(id),
     chat_id TEXT,
     user_id TEXT,
     filename TEXT NOT NULL,
@@ -244,6 +267,7 @@ CREATE TABLE IF NOT EXISTS financial_documents (
 -- 16. 員工主檔
 CREATE TABLE IF NOT EXISTS employees (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id INTEGER DEFAULT 1 REFERENCES companies(id),
     name TEXT NOT NULL,
     id_number TEXT,
     position TEXT,
@@ -287,6 +311,7 @@ CREATE TABLE IF NOT EXISTS payroll (
 -- 18. 分錄（日記帳 / Journal Entries）— 複式簿記核心
 CREATE TABLE IF NOT EXISTS journal_entries (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id INTEGER DEFAULT 1 REFERENCES companies(id),
     entry_date TEXT NOT NULL,
     year_month TEXT NOT NULL,
     source_type TEXT NOT NULL DEFAULT 'purchase',
@@ -303,7 +328,8 @@ CREATE TABLE IF NOT EXISTS journal_entries (
 -- 19. 月度會計總表（每月損益摘要）
 CREATE TABLE IF NOT EXISTS monthly_accounting (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    year_month TEXT UNIQUE NOT NULL,
+    company_id INTEGER DEFAULT 1 REFERENCES companies(id),
+    year_month TEXT NOT NULL,
     total_income REAL DEFAULT 0,
     total_expense REAL DEFAULT 0,
     total_tax REAL DEFAULT 0,
@@ -328,6 +354,7 @@ CREATE TABLE IF NOT EXISTS chart_of_accounts (
 -- 21. 固定資產
 CREATE TABLE IF NOT EXISTS fixed_assets (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id INTEGER DEFAULT 1 REFERENCES companies(id),
     name TEXT NOT NULL,
     category TEXT DEFAULT '',
     purchase_date TEXT,
@@ -339,6 +366,23 @@ CREATE TABLE IF NOT EXISTS fixed_assets (
     status TEXT DEFAULT 'active',
     notes TEXT DEFAULT '',
     created_at TEXT DEFAULT (datetime('now','localtime'))
+);
+
+-- 22. 報表確認追蹤
+CREATE TABLE IF NOT EXISTS report_confirmations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id INTEGER DEFAULT 1 REFERENCES companies(id),
+    period TEXT NOT NULL,
+    report_type TEXT NOT NULL,
+    generated_at TEXT DEFAULT (datetime('now','localtime')),
+    gdrive_path TEXT DEFAULT '',
+    file_path TEXT DEFAULT '',
+    summary_data TEXT DEFAULT '{}',
+    confirmed_by TEXT DEFAULT '',
+    confirmed_at TEXT,
+    status TEXT DEFAULT 'pending',
+    note TEXT DEFAULT '',
+    UNIQUE(period, report_type)
 );
 """
 
@@ -465,9 +509,109 @@ def init_db():
         conn.execute("ALTER TABLE monthly_accounting ADD COLUMN is_closed INTEGER DEFAULT 0")
     except sqlite3.OperationalError:
         pass
+    # 遷移：report_confirmations 表
+    try:
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS report_confirmations ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "period TEXT NOT NULL,"
+            "report_type TEXT NOT NULL,"
+            "generated_at TEXT DEFAULT (datetime('now','localtime')),"
+            "gdrive_path TEXT DEFAULT '',"
+            "file_path TEXT DEFAULT '',"
+            "summary_data TEXT DEFAULT '{}',"
+            "confirmed_by TEXT DEFAULT '',"
+            "confirmed_at TEXT,"
+            "status TEXT DEFAULT 'pending',"
+            "note TEXT DEFAULT '',"
+            "UNIQUE(period, report_type))"
+        )
+    except sqlite3.OperationalError:
+        pass
+    # === 多租戶遷移：company_id 欄位 + companies 種子資料 ===
+    _migrate_multi_tenant(conn)
     conn.commit()
     conn.close()
     logger.info(f"Database initialized: {DB_PATH}")
+
+
+def _migrate_multi_tenant(conn: sqlite3.Connection):
+    """v3.0 多租戶遷移 — 加 company_id 欄位 + 種子公司資料"""
+    # 需要加 company_id 的表
+    tables_need_company_id = [
+        "purchase_staging", "income", "monthly_cost", "employees",
+        "journal_entries", "monthly_accounting", "financial_documents",
+        "tax_exports", "report_confirmations", "fixed_assets",
+    ]
+    for table in tables_need_company_id:
+        try:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN company_id INTEGER DEFAULT 1")
+            logger.info(f"Migration: added company_id to {table}")
+        except sqlite3.OperationalError:
+            pass  # 已存在
+
+    # 種子公司資料
+    _companies = [
+        (1, "福利社", "升鼎商行", "81410187", "臺南市安定區安加里219-9號1樓", "尤聖樺", "福利社", 1),
+        (2, "王凱", "王凱食品有限公司", "90438334", "高雄市苓雅區中山二路489號8樓之2", "李佳芸", "王凱", 0),
+        (3, "台達2廠", "升鼎商行", "81410187", "臺南市安定區安加里219-9號1樓", "尤聖樺", "台達2廠", 0),
+        (4, "富燚", "富燚商行", "00281384", "", "陳建男", "富燚", 0),
+        (5, "台達1廠", "升鼎商行", "81410187", "臺南市安定區安加里219-9號1樓", "尤聖樺", "台達1廠", 0),
+    ]
+    for c in _companies:
+        try:
+            conn.execute(
+                "INSERT OR IGNORE INTO companies (id, short_name, full_name, tax_id, address, owner, gdrive_folder, is_default) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)", c
+            )
+        except sqlite3.OperationalError:
+            pass
+    logger.info("Migration: multi-tenant setup complete")
+
+
+# === 公司查詢 ===
+
+def get_company(company_id: int) -> Optional[dict]:
+    conn = _get_conn()
+    row = conn.execute("SELECT * FROM companies WHERE id=?", (company_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def get_all_companies() -> list[dict]:
+    conn = _get_conn()
+    rows = conn.execute("SELECT * FROM companies WHERE is_active=1 ORDER BY id").fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_company_by_channel(channel_id: str) -> Optional[dict]:
+    """從 LINE Channel ID 查找對應公司"""
+    conn = _get_conn()
+    row = conn.execute(
+        "SELECT * FROM companies WHERE line_channel_id=? AND is_active=1", (channel_id,)
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def get_default_company() -> Optional[dict]:
+    conn = _get_conn()
+    row = conn.execute("SELECT * FROM companies WHERE is_default=1 AND is_active=1").fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def update_company_line_credentials(company_id: int, channel_id: str,
+                                     channel_secret: str, access_token: str):
+    """更新公司的 LINE 憑證"""
+    conn = _get_conn()
+    conn.execute(
+        "UPDATE companies SET line_channel_id=?, line_channel_secret=?, line_channel_access_token=? WHERE id=?",
+        (channel_id, channel_secret, access_token, company_id)
+    )
+    conn.commit()
+    conn.close()
 
 
 # === 對話狀態 ===
@@ -585,6 +729,7 @@ def update_ingredient_price(ingredient_id: int, price: float, market_ref: float 
 def add_purchase_staging(
     user_id: str, chat_id: str, image_message_id: str = "",
     local_image_path: str = "", purchase_date: str = None,
+    company_id: int = 1,
 ) -> int:
     if not purchase_date:
         purchase_date = date.today().isoformat()
@@ -592,10 +737,10 @@ def add_purchase_staging(
     tax_period = _calc_tax_period(purchase_date)
     conn = _get_conn()
     cur = conn.execute(
-        "INSERT INTO purchase_staging (user_id, chat_id, image_message_id, "
+        "INSERT INTO purchase_staging (company_id, user_id, chat_id, image_message_id, "
         "local_image_path, purchase_date, year_month, tax_period) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (user_id, chat_id, image_message_id, local_image_path,
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (company_id, user_id, chat_id, image_message_id, local_image_path,
          purchase_date, year_month, tax_period),
     )
     conn.commit()
@@ -658,38 +803,45 @@ def update_staging_hash(staging_id: int, image_hash: str):
     conn.close()
 
 
-def get_pending_stagings(chat_id: str = None) -> list[dict]:
+def get_pending_stagings(chat_id: str = None, company_id: int = None) -> list[dict]:
     conn = _get_conn()
+    sql = "SELECT * FROM purchase_staging WHERE status='pending'"
+    params = []
     if chat_id:
-        rows = conn.execute(
-            "SELECT * FROM purchase_staging WHERE status='pending' AND chat_id=? ORDER BY created_at DESC",
-            (chat_id,),
-        ).fetchall()
-    else:
-        rows = conn.execute(
-            "SELECT * FROM purchase_staging WHERE status='pending' ORDER BY created_at DESC"
-        ).fetchall()
+        sql += " AND chat_id=?"
+        params.append(chat_id)
+    if company_id:
+        sql += " AND company_id=?"
+        params.append(company_id)
+    sql += " ORDER BY created_at DESC"
+    rows = conn.execute(sql, params).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
 
-def get_confirmed_stagings(tax_period: str) -> list[dict]:
+def get_confirmed_stagings(tax_period: str, company_id: int = None) -> list[dict]:
     conn = _get_conn()
-    rows = conn.execute(
-        "SELECT * FROM purchase_staging WHERE status='confirmed' AND tax_period=? ORDER BY purchase_date",
-        (tax_period,),
-    ).fetchall()
+    sql = "SELECT * FROM purchase_staging WHERE status='confirmed' AND tax_period=?"
+    params = [tax_period]
+    if company_id:
+        sql += " AND company_id=?"
+        params.append(company_id)
+    sql += " ORDER BY purchase_date"
+    rows = conn.execute(sql, params).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
 
-def get_stagings_by_month(year_month: str) -> list[dict]:
+def get_stagings_by_month(year_month: str, company_id: int = None) -> list[dict]:
     conn = _get_conn()
-    rows = conn.execute(
-        "SELECT * FROM purchase_staging WHERE year_month=? AND status IN ('confirmed','reported','exported') "
-        "ORDER BY purchase_date",
-        (year_month,),
-    ).fetchall()
+    sql = ("SELECT * FROM purchase_staging WHERE year_month=? "
+           "AND status IN ('confirmed','reported','exported')")
+    params = [year_month]
+    if company_id:
+        sql += " AND company_id=?"
+        params.append(company_id)
+    sql += " ORDER BY purchase_date"
+    rows = conn.execute(sql, params).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
@@ -912,14 +1064,17 @@ def set_config(key: str, value: str):
 
 # === 統計 ===
 
-def get_staging_stats(year_month: str = None) -> dict:
+def get_staging_stats(year_month: str = None, company_id: int = None) -> dict:
     conn = _get_conn()
+    conditions = []
+    params = []
     if year_month:
-        where = "WHERE year_month=?"
-        params = (year_month,)
-    else:
-        where = ""
-        params = ()
+        conditions.append("year_month=?")
+        params.append(year_month)
+    if company_id:
+        conditions.append("company_id=?")
+        params.append(company_id)
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
     row = conn.execute(
         f"SELECT COUNT(*) as total, "
         f"SUM(CASE WHEN status='pending' THEN 1 ELSE 0 END) as pending, "
@@ -1579,3 +1734,102 @@ def get_payroll_for_journal(year_month: str) -> list[dict]:
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+# === 報表確認追蹤 ===
+
+def upsert_report_confirmation(period: str, report_type: str,
+                               gdrive_path: str = "", file_path: str = "",
+                               summary_data: dict = None) -> int:
+    """建立或更新報表確認記錄，回傳 id"""
+    conn = _get_conn()
+    summary_json = json.dumps(summary_data or {}, ensure_ascii=False)
+    conn.execute(
+        "INSERT INTO report_confirmations (period, report_type, gdrive_path, file_path, summary_data) "
+        "VALUES (?, ?, ?, ?, ?) "
+        "ON CONFLICT(period, report_type) DO UPDATE SET "
+        "gdrive_path=excluded.gdrive_path, file_path=excluded.file_path, "
+        "summary_data=excluded.summary_data, generated_at=datetime('now','localtime'), "
+        "status='pending', confirmed_by='', confirmed_at=NULL, note=''",
+        (period, report_type, gdrive_path, file_path, summary_json),
+    )
+    row = conn.execute(
+        "SELECT id FROM report_confirmations WHERE period=? AND report_type=?",
+        (period, report_type),
+    ).fetchone()
+    conn.commit()
+    conn.close()
+    return row["id"] if row else 0
+
+
+def confirm_report(confirmation_id: int, confirmed_by: str = "") -> bool:
+    """確認報表"""
+    conn = _get_conn()
+    conn.execute(
+        "UPDATE report_confirmations SET status='confirmed', "
+        "confirmed_by=?, confirmed_at=datetime('now','localtime') WHERE id=?",
+        (confirmed_by, confirmation_id),
+    )
+    conn.commit()
+    conn.close()
+    return True
+
+
+def dispute_report(confirmation_id: int, note: str = "",
+                   disputed_by: str = "") -> bool:
+    """回報報表有問題"""
+    conn = _get_conn()
+    conn.execute(
+        "UPDATE report_confirmations SET status='disputed', "
+        "confirmed_by=?, note=?, confirmed_at=datetime('now','localtime') WHERE id=?",
+        (disputed_by, note, confirmation_id),
+    )
+    conn.commit()
+    conn.close()
+    return True
+
+
+def get_report_confirmation(period: str, report_type: str) -> dict | None:
+    """取得特定報表的確認狀態"""
+    conn = _get_conn()
+    row = conn.execute(
+        "SELECT * FROM report_confirmations WHERE period=? AND report_type=?",
+        (period, report_type),
+    ).fetchone()
+    conn.close()
+    if row:
+        d = dict(row)
+        d["summary_data"] = json.loads(d.get("summary_data", "{}") or "{}")
+        return d
+    return None
+
+
+def get_report_confirmation_by_id(confirmation_id: int) -> dict | None:
+    """用 ID 取得確認記錄"""
+    conn = _get_conn()
+    row = conn.execute(
+        "SELECT * FROM report_confirmations WHERE id=?",
+        (confirmation_id,),
+    ).fetchone()
+    conn.close()
+    if row:
+        d = dict(row)
+        d["summary_data"] = json.loads(d.get("summary_data", "{}") or "{}")
+        return d
+    return None
+
+
+def get_pending_report_confirmations() -> list[dict]:
+    """取得所有待確認的報表"""
+    conn = _get_conn()
+    rows = conn.execute(
+        "SELECT * FROM report_confirmations WHERE status='pending' "
+        "ORDER BY generated_at DESC",
+    ).fetchall()
+    conn.close()
+    results = []
+    for r in rows:
+        d = dict(r)
+        d["summary_data"] = json.loads(d.get("summary_data", "{}") or "{}")
+        results.append(d)
+    return results

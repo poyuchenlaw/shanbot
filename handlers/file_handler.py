@@ -240,6 +240,7 @@ def build_smart_filename(
 async def handle_file_received(
     line_service, message_id: str, filename: str,
     group_id: str, user_id: str, reply_token: str,
+    company_id: int = 1,
 ) -> str | None:
     """完整檔案處理流程：下載 → 內容檢視 → 分類 → 重命名 → 儲存 → GDrive → Flex"""
 
@@ -347,7 +348,8 @@ async def handle_file_received(
     try:
         from services.gdrive_service import upload_financial_doc
         gdrive_path = await upload_financial_doc(
-            local_path, year_month, doc_category, smart_name
+            local_path, year_month, doc_category, smart_name,
+            company_id=company_id,
         )
         if gdrive_path:
             sm.update_financial_document(doc_id, gdrive_path=gdrive_path)

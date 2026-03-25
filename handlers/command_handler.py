@@ -13,7 +13,8 @@ logger = logging.getLogger("shanbot.command")
 
 
 async def handle_text(line_service, text: str, group_id: str,
-                      user_id: str, user_name: str, reply_token: str) -> Optional[str]:
+                      user_id: str, user_name: str, reply_token: str,
+                      company_id: int = 1) -> Optional[str]:
     """主路由：文字訊息 → 對應處理"""
 
     # 1. 檢查對話狀態（state machine）
@@ -58,6 +59,9 @@ async def handle_text(line_service, text: str, group_id: str,
 
     if state == "waiting_duplicate_decision":
         return await _handle_duplicate_decision(line_service, text, group_id, user_id, state_data)
+
+    if state == "waiting_report_dispute":
+        return _handle_report_dispute_text(text, group_id, state_data)
 
     if state == "waiting_final_confirm":
         return await _handle_final_confirm_response(text, group_id, state_data)
@@ -232,7 +236,7 @@ async def handle_text(line_service, text: str, group_id: str,
 # === 歸檔輔助函數 ===
 
 async def _do_archive(staging_id: int, staging: dict) -> str:
-    """GDrive 正式歸檔：重命名 + 收據憑證/ + INDEX.csv
+    """GDrive 正式歸檔：重命名 + 收據憑證/ + INDEX.csv + 清理待確認
 
     Returns:
         歸檔結果訊息字串（成功含路徑，失敗或無圖片則空字串）
@@ -251,6 +255,11 @@ async def _do_archive(staging_id: int, staging: dict) -> str:
             "items": [{"name": it["item_name"]} for it in items],
         }
 
+        # 取得待確認路徑供歸檔後清理
+        pending_gdrive_path = staging.get("gdrive_path", "")
+        if pending_gdrive_path and "待確認" not in pending_gdrive_path:
+            pending_gdrive_path = None  # 只清理待確認資料夾的檔案
+
         archive_result = await archive_receipt(
             local_path=staging["local_image_path"],
             purchase_date=staging.get("purchase_date", ""),
@@ -258,6 +267,8 @@ async def _do_archive(staging_id: int, staging: dict) -> str:
             total_amount=staging.get("total_amount", 0),
             staging_id=staging_id,
             ocr_summary=ocr_summary,
+            pending_gdrive_path=pending_gdrive_path,
+            company_id=staging.get("company_id", 1),
         )
 
         if archive_result.get("gdrive_path"):
@@ -283,7 +294,7 @@ async def _do_archive(staging_id: int, staging: dict) -> str:
 
 # === 確認/修改/捨棄 ===
 
-async def _confirm_staging(staging_id: int, group_id: str) -> str:
+async def _confirm_staging(staging_id: int, group_id: str, company_id: int = 1) -> str:
     """第一步確認：顯示最終確認 Flex（二次確認流程）"""
     staging = sm.get_staging(staging_id)
     if not staging:
@@ -724,6 +735,31 @@ async def _handle_duplicate_decision(line_service, text: str, group_id: str,
         "⚠️ 偵測到重複圖片\n"
         "回覆「重複跳過」跳過不存\n"
         "回覆「另存」另存新檔"
+    )
+
+
+def _handle_report_dispute_text(text: str, group_id: str, state_data: dict) -> str:
+    """處理報表問題回報文字（waiting_report_dispute 狀態）"""
+    sm.clear_state(group_id)
+    confirmation_id = state_data.get("confirmation_id", 0)
+    display_name = state_data.get("display_name", "")
+    note = text.strip()
+
+    if not note:
+        return "已取消問題回報"
+
+    if not confirmation_id:
+        return "找不到對應的報表確認記錄"
+
+    sm.dispute_report(confirmation_id, note=note, disputed_by=display_name)
+    record = sm.get_report_confirmation_by_id(confirmation_id)
+    period = record["period"] if record else "?"
+
+    return (
+        f"📝 已記錄 {period} 報表問題\n"
+        f"回報人：{display_name}\n"
+        f"問題描述：{note}\n\n"
+        f"管理員會盡快處理。"
     )
 
 

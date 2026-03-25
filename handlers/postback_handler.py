@@ -11,7 +11,8 @@ logger = logging.getLogger("shanbot.postback")
 
 
 async def handle_postback(line_service, data_str: str, group_id: str,
-                          user_id: str, reply_token: str):
+                          user_id: str, reply_token: str,
+                          company_id: int = 1):
     """主路由：解析 postback data → 分發到子處理器"""
     if not line_service:
         logger.warning("line_service is None, skipping postback")
@@ -66,6 +67,10 @@ async def handle_postback(line_service, data_str: str, group_id: str,
         _handle_menu_photo_upload(line_service, group_id, user_id, reply_token)
     elif action == "menu_photo_regenerate":
         _handle_menu_photo_upload(line_service, group_id, user_id, reply_token)
+    elif action == "rpt_confirm":
+        _handle_report_confirm(line_service, params, user_id, reply_token)
+    elif action == "rpt_dispute":
+        _handle_report_dispute(line_service, params, group_id, user_id, reply_token)
     else:
         logger.warning(f"Unknown postback: {data_str}")
 
@@ -80,8 +85,12 @@ def _handle_menu(menu: str, group_id: str = None) -> dict | None:
     elif menu == "finance_upload":
         return fb.build_finance_upload_menu()
     elif menu == "purchase":
-        pending_count = len(sm.get_pending_stagings(group_id))
-        return fb.build_purchase_menu(pending_count)
+        pendings = sm.get_pending_stagings(group_id)
+        pending_count = len(pendings)
+        pending_unrecognized = sum(
+            1 for p in pendings if (p.get("ocr_confidence") or 0) < 0.85
+        )
+        return fb.build_purchase_menu(pending_count, pending_unrecognized)
     elif menu == "menu_plan":
         return fb.build_menu_plan_menu()
     elif menu == "export":
@@ -262,14 +271,17 @@ async def _handle_purchase(line_service, params: dict, group_id: str, reply_toke
             from services.market_service import get_market_summary
             from datetime import date
             summary = get_market_summary(date.today())
-            if summary:
+            if summary and summary.get("categories"):
                 lines = ["📊 今日農產品行情", ""]
-                for cat, items in summary.items():
-                    lines.append(f"【{cat}】")
-                    for item in items[:5]:
-                        name = item.get("品名", item.get("name", ""))
-                        price = item.get("平均價", item.get("avg_price", 0))
-                        lines.append(f"  {name}：${price}")
+                for cat, info in summary["categories"].items():
+                    sample = info.get("sample", []) if isinstance(info, dict) else []
+                    count = info.get("count", 0) if isinstance(info, dict) else 0
+                    lines.append(f"【{cat}】({count} 筆)")
+                    for item in sample[:5]:
+                        if isinstance(item, dict):
+                            name = item.get("name", item.get("品名", ""))
+                            price = item.get("avg_price", item.get("平均價", 0))
+                            lines.append(f"  {name}：${price}")
                     lines.append("")
                 line_service.reply(reply_token, "\n".join(lines))
             else:
@@ -381,8 +393,28 @@ async def _handle_do_export(line_service, params: dict, group_id: str, reply_tok
             path = generate_monthly_report(period)
             if path:
                 gdrive_rel = await _upload_export_to_gdrive(path, "monthly", period)
-                gdrive_note = f"\n☁️ 已同步：{gdrive_rel}" if gdrive_rel else ""
-                line_service.reply(reply_token, f"✅ 月報表已生成\n📁 {path}{gdrive_note}")
+                # 建立確認記錄 + 回覆確認 Flex
+                stats = sm.get_staging_stats(period)
+                mc = sm.get_monthly_cost(period)
+                summary = {
+                    "total_count": stats.get("total", 0),
+                    "total_amount": stats.get("total_amount", 0),
+                    "total_tax": stats.get("total_tax", 0),
+                    "pending": stats.get("pending", 0),
+                    "invoice_count": mc.get("invoice_count", 0) if mc else 0,
+                    "receipt_count": mc.get("receipt_count", 0) if mc else 0,
+                }
+                cid = sm.upsert_report_confirmation(
+                    period, "monthly",
+                    gdrive_path=gdrive_rel or "",
+                    file_path=path,
+                    summary_data=summary,
+                )
+                flex = fb.build_report_confirmation_flex(
+                    cid, period, "monthly", summary,
+                    gdrive_path=gdrive_rel or "",
+                )
+                line_service.reply_flex(reply_token, f"📊 {period} 月報表", flex)
             else:
                 line_service.reply(reply_token, f"⚠️ {period} 無可匯出的資料")
 
@@ -392,8 +424,18 @@ async def _handle_do_export(line_service, params: dict, group_id: str, reply_tok
             path = generate_annual_report(year)
             if path:
                 gdrive_rel = await _upload_export_to_gdrive(path, "annual", year)
-                gdrive_note = f"\n☁️ 已同步：{gdrive_rel}" if gdrive_rel else ""
-                line_service.reply(reply_token, f"✅ 年報表已生成\n📁 {path}{gdrive_note}")
+                summary = {"total_count": 0, "total_amount": 0}
+                cid = sm.upsert_report_confirmation(
+                    year, "annual",
+                    gdrive_path=gdrive_rel or "",
+                    file_path=path,
+                    summary_data=summary,
+                )
+                flex = fb.build_report_confirmation_flex(
+                    cid, year, "annual", summary,
+                    gdrive_path=gdrive_rel or "",
+                )
+                line_service.reply_flex(reply_token, f"📊 {year} 年度報表", flex)
             else:
                 line_service.reply(reply_token, f"⚠️ {year} 年無可匯出的資料")
 
@@ -654,21 +696,26 @@ async def _handle_do_gen_report(line_service, params: dict, group_id: str, reply
         path = gen_func(period)
         if path:
             # 上傳到 GDrive 財務報表資料夾
-            gdrive_note = ""
+            gdrive_rel = ""
             try:
                 from services.gdrive_service import upload_financial_doc
                 gdrive_rel = await upload_financial_doc(
                     path, period[:7], "report", os.path.basename(path)
-                )
-                if gdrive_rel:
-                    gdrive_note = f"\n☁️ 已同步：{gdrive_rel}"
+                ) or ""
             except Exception as e:
                 logger.warning(f"GDrive upload skipped: {e}")
 
-            line_service.reply(reply_token,
-                               f"✅ {label}已生成\n"
-                               f"📅 期間：{period}\n"
-                               f"📁 {path}{gdrive_note}")
+            # 建立確認記錄 + Flex 回覆
+            cid = sm.upsert_report_confirmation(
+                period, report_type,
+                gdrive_path=gdrive_rel,
+                file_path=path,
+            )
+            flex = fb.build_report_confirmation_flex(
+                cid, period, report_type, {},
+                gdrive_path=gdrive_rel,
+            )
+            line_service.reply_flex(reply_token, f"📊 {period} {label}", flex)
         else:
             line_service.reply(reply_token,
                                f"⚠️ {period} 無足夠資料生成{label}")
@@ -760,6 +807,63 @@ def _parse_data(data_str: str) -> dict:
     """解析 postback data 字串為 dict"""
     parsed = parse_qs(data_str, keep_blank_values=True)
     return {k: v[0] if len(v) == 1 else v for k, v in parsed.items()}
+
+
+# === 報表確認 ===
+
+def _handle_report_confirm(line_service, params: dict, user_id: str, reply_token: str):
+    """使用者確認報表無誤"""
+    confirmation_id = int(params.get("id", 0))
+    if not confirmation_id:
+        line_service.reply(reply_token, "無效的確認編號")
+        return
+
+    record = sm.get_report_confirmation_by_id(confirmation_id)
+    if not record:
+        line_service.reply(reply_token, "找不到該報表確認記錄")
+        return
+
+    if record["status"] == "confirmed":
+        line_service.reply(reply_token,
+                           f"✅ {record['period']} 報表已於 {record['confirmed_at'][:16]} 確認過")
+        return
+
+    # 取得使用者名稱
+    profile = line_service.get_profile(user_id) if user_id else None
+    display_name = profile.get("displayName", user_id) if profile else user_id
+
+    sm.confirm_report(confirmation_id, confirmed_by=display_name)
+    line_service.reply(reply_token,
+                       f"✅ {record['period']} 報表已確認\n"
+                       f"確認人：{display_name}\n"
+                       f"確認時間：{__import__('datetime').datetime.now().strftime('%Y-%m-%d %H:%M')}")
+
+
+def _handle_report_dispute(line_service, params: dict, group_id: str,
+                           user_id: str, reply_token: str):
+    """使用者回報報表有問題"""
+    confirmation_id = int(params.get("id", 0))
+    if not confirmation_id:
+        line_service.reply(reply_token, "無效的確認編號")
+        return
+
+    record = sm.get_report_confirmation_by_id(confirmation_id)
+    if not record:
+        line_service.reply(reply_token, "找不到該報表確認記錄")
+        return
+
+    profile = line_service.get_profile(user_id) if user_id else None
+    display_name = profile.get("displayName", user_id) if profile else user_id
+
+    # 設定等待回報內容狀態
+    sm.set_state(group_id, "waiting_report_dispute", {
+        "confirmation_id": confirmation_id,
+        "user_id": user_id,
+        "display_name": display_name,
+    })
+    line_service.reply(reply_token,
+                       f"📝 請說明 {record['period']} 報表的問題：\n"
+                       "（直接輸入文字描述即可）")
 
 
 def _alt_text(menu: str) -> str:

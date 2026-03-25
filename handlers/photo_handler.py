@@ -16,6 +16,7 @@ FILES_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "fi
 async def handle_photo_received(
     line_service, message_id: str, group_id: str,
     user_id: str, reply_token: str,
+    company_id: int = 1,
 ) -> Optional[str]:
     """完整照片處理流程：下載 → OCR → 暫存 → 回覆"""
 
@@ -77,11 +78,11 @@ async def handle_photo_received(
 
     logger.info(f"Image saved: {local_path} ({len(image_bytes)} bytes)")
 
-    # 2.5 上傳收據到 GDrive
+    # 2.5 上傳收據到 GDrive（多公司路徑）
     gdrive_path = None
     try:
         from services.gdrive_service import upload_receipt
-        gdrive_path = await upload_receipt(local_path)
+        gdrive_path = await upload_receipt(local_path, company_id=company_id)
         if gdrive_path:
             logger.info(f"Receipt uploaded to GDrive: {gdrive_path}")
     except Exception as e:
@@ -94,6 +95,7 @@ async def handle_photo_received(
         image_message_id=message_id,
         local_image_path=local_path,
         purchase_date=date.today().isoformat(),
+        company_id=company_id,
     )
 
     # 3.5 儲存圖片 hash
