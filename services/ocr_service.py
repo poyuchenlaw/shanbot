@@ -9,7 +9,33 @@ from typing import Optional
 
 logger = logging.getLogger("shanbot.ocr")
 
+from difflib import SequenceMatcher
+
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+
+# === 已知實體名稱校正（OCR 常誤認的罕見字）===
+# 格式：{錯誤字: 正確字}，在辨識結果中自動替換
+_CHAR_CORRECTIONS = {
+    "燊": "燚",  # 富燚商行 — 燊(三火+木) → 燚(四火, yì)
+    "焱": "燚",  # 焱(三火) → 燚(四火)
+}
+
+# 已知 OCR 整詞誤認（完整名稱替換，優先於字元校正）
+_NAME_CORRECTIONS = {
+    "富煌商行": "富燚商行",  # OCR 把燚認成煌
+    "富鎂商行": "富燚商行",  # OCR 把燚認成鎂
+    "富焱商行": "富燚商行",  # OCR 把燚認成焱
+    "富燊商行": "富燚商行",  # OCR 把燚認成燊
+    "富熠商行": "富燚商行",  # OCR 把燚認成熠
+    "富㷋商行": "富燚商行",  # OCR 把燚認成㷋
+    "王凱食品": "王凱食品有限公司",  # 簡稱→全稱
+}
+
+# 已知公司/供應商名稱（用於模糊比對校正）
+_KNOWN_ENTITIES = [
+    "升鼎商行", "王凱食品有限公司", "富燚商行",
+    "福利社", "王凱", "台達2廠", "富燚", "台達1廠",
+]
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 
 # OCR 門檻（前 200 張較嚴格）
@@ -104,10 +130,38 @@ EINVOICE_API_KEY = os.environ.get("EINVOICE_API_KEY", "")
 EINVOICE_API_URL = "https://api.einvoice.nat.gov.tw"
 
 
+def _check_numpy_faiss_compat() -> bool:
+    """Pre-check numpy/faiss compatibility to avoid C-level crash."""
+    try:
+        import numpy as np
+        major = int(np.__version__.split(".")[0])
+        if major >= 2:
+            # faiss-cpu compiled for numpy 1.x will segfault on numpy 2.x
+            try:
+                import importlib.util
+                if importlib.util.find_spec("faiss"):
+                    logger.warning(
+                        f"numpy {np.__version__} detected; "
+                        "faiss-cpu may crash (compiled for numpy 1.x). "
+                        "Skipping PaddleOCR to prevent process crash."
+                    )
+                    return False
+            except Exception:
+                pass
+    except Exception:
+        pass
+    return True
+
+
 def _get_paddle_engine():
     """延遲載入 PaddleOCR PP-OCRv5（節省啟動記憶體）"""
     global _paddle_engine
     if _paddle_engine is None:
+        # Pre-check: numpy 2.x + faiss 1.x = C-level crash (segfault)
+        if not _check_numpy_faiss_compat():
+            logger.warning("PaddleOCR disabled: numpy/faiss incompatibility")
+            _paddle_engine = "unavailable"
+            return None
         try:
             import logging as _logging
             _logging.getLogger("ppocr").setLevel(_logging.WARNING)
@@ -432,6 +486,9 @@ def process_image(image_path: str) -> OcrResult:
             )
             result.items.append(item)
 
+    # === 後處理：罕見字校正 + 供應商模糊比對 ===
+    _post_process_ocr(result)
+
     # === 信心度計算 ===
     base_confidence = paddle_confidence if paddle_confidence > 0 else 0.50
 
@@ -514,6 +571,70 @@ def process_image(image_path: str) -> OcrResult:
 
 
 # === 輔助函數 ===
+
+def _post_process_ocr(result: OcrResult):
+    """OCR 後處理：整詞校正 → 罕見字校正 → 供應商模糊比對"""
+    if result.supplier_name:
+        original = result.supplier_name
+
+        # 1. 整詞校正（優先，已知 OCR 誤認）
+        if result.supplier_name in _NAME_CORRECTIONS:
+            result.supplier_name = _NAME_CORRECTIONS[result.supplier_name]
+
+        # 2. 罕見字校正（字元級）
+        corrected = result.supplier_name
+        for wrong, right in _CHAR_CORRECTIONS.items():
+            if wrong in corrected:
+                corrected = corrected.replace(wrong, right)
+        result.supplier_name = corrected
+
+        if result.supplier_name != original:
+            logger.info(f"OCR 名稱校正: {original} → {result.supplier_name}")
+
+    # 2. raw_text 中的罕見字也校正（供後續比對用）
+    if result.raw_text:
+        for wrong, right in _CHAR_CORRECTIONS.items():
+            result.raw_text = result.raw_text.replace(wrong, right)
+
+    # 3. 供應商模糊比對（已知實體 + DB 供應商）
+    if result.supplier_name:
+        matched = _fuzzy_match_supplier(result.supplier_name)
+        if matched and matched != result.supplier_name:
+            logger.info(f"供應商模糊比對: {result.supplier_name} → {matched}")
+            result.supplier_name = matched
+
+
+def _fuzzy_match_supplier(name: str, threshold: float = 0.7) -> Optional[str]:
+    """模糊比對供應商名稱，回傳最佳匹配（或 None）"""
+    if not name or len(name) < 2:
+        return None
+
+    best_match = None
+    best_score = 0
+
+    # 比對已知實體
+    candidates = list(_KNOWN_ENTITIES)
+
+    # 比對 DB 供應商
+    try:
+        import state_manager as sm
+        for s in sm.get_all_suppliers():
+            if s["name"] not in candidates:
+                candidates.append(s["name"])
+    except Exception:
+        pass
+
+    for candidate in candidates:
+        score = SequenceMatcher(None, name, candidate).ratio()
+        if score > best_score and score >= threshold:
+            best_score = score
+            best_match = candidate
+
+    # 只有在分數夠高且不是完全一樣時才回傳
+    if best_match and best_match != name and best_score >= threshold:
+        return best_match
+    return None
+
 
 def _check_amount_consistency(ocr_text: str, gemini_total: float) -> bool:
     """檢查 PaddleOCR 文字中是否包含 Gemini 提取的總金額"""
