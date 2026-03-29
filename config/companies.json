@@ -8,9 +8,9 @@
       "tax_reg_no": "",
       "address": "臺南市安定區安加里219-9號1樓",
       "owner": "尤聖樺",
-      "line_channel_id": "",
-      "line_channel_secret": "",
-      "line_channel_access_token": "",
+      "line_channel_id": "2009635843",
+      "line_channel_secret": "d3c7013e8b298e2eda072fa3484123d8",
+      "line_channel_access_token": "jXwHh+hL9v/PyuK7EEY7+kW4iI1c6i7hR2BzvvUvVUjJLyUh/aDm3jpANmLyjJNvrd4YoVqB/3ObmI35mulR9PU6I3DZJsgkjAXKGo6WqX81No+w0kFWWt5F6nQ08TtC8vOUh6HmFoDHhAxMDVIYqAdB04t89/1O/w1cDnyilFU=",
       "gdrive_folder": "福利社",
       "is_default": true
     },
@@ -22,9 +22,9 @@
       "tax_reg_no": "",
       "address": "高雄市苓雅區中山二路489號8樓之2",
       "owner": "李佳芸",
-      "line_channel_id": "",
-      "line_channel_secret": "",
-      "line_channel_access_token": "",
+      "line_channel_id": "2009635851",
+      "line_channel_secret": "8ba2daa07131583d178c05e9e4ca0f9c",
+      "line_channel_access_token": "0tEc9L9X/9XWRHpgunTKp8C3Hh7dEH9tI3PrOQxvHrdmecDirphSZQee4FZzG0xoUs5nh1HjSq8VG3d262ai9alUlCUqbEscxqMcKn7cT3OpdsBxEG5hZ94k1cOOFLpDYza3l8TBdwo0jQ8DWW+XdwdB04t89/1O/w1cDnyilFU=",
       "gdrive_folder": "王凱",
       "is_default": false
     },
@@ -36,9 +36,9 @@
       "tax_reg_no": "",
       "address": "臺南市安定區安加里219-9號1樓",
       "owner": "尤聖樺",
-      "line_channel_id": "",
-      "line_channel_secret": "",
-      "line_channel_access_token": "",
+      "line_channel_id": "2009635854",
+      "line_channel_secret": "7e59417dbcd469bd4f91fcfd999cadfb",
+      "line_channel_access_token": "q7aZig3yXJAXSEQ35tnYoTpd9pr/QynaWcVLVkVD+PRmE7ThwC3xSaAR79d8Hfbr1dp1j8Z6oe+SJZ2OKnDRtT3VRbsZZQcrssRSf/6ljWIAChcJSA0XSBcemItvjQejtE99MBtlwwn8JoR4ftvb0wdB04t89/1O/w1cDnyilFU=",
       "gdrive_folder": "台達2廠",
       "is_default": false
     },
@@ -50,9 +50,9 @@
       "tax_reg_no": "",
       "address": "",
       "owner": "陳建男",
-      "line_channel_id": "",
-      "line_channel_secret": "",
-      "line_channel_access_token": "",
+      "line_channel_id": "2009635855",
+      "line_channel_secret": "df5450d0f534c7f37d1da737f638e336",
+      "line_channel_access_token": "REZ2W+LGRBMQo2Ve56W6A7ndDvsjk5XdrttU5y2P8YIsZmrHmrSfR791knStWMSqHr5ZItDduR+zRBMKbX+4SXuRAq2/DFyPCzy8MNIW3OweUyVoB/0fqb3XgMRQsCUgvnkLGWIrBbOqt40PNHExrQdB04t89/1O/w1cDnyilFU=",
       "gdrive_folder": "富燚",
       "is_default": false
     },
@@ -64,12 +64,11 @@
       "tax_reg_no": "",
       "address": "臺南市安定區安加里219-9號1樓",
       "owner": "尤聖樺",
-      "line_channel_id": "",
-      "line_channel_secret": "",
-      "line_channel_access_token": "",
+      "line_channel_id": "2009635856",
+      "line_channel_secret": "548cef599c4890a9f20edfe1a03f314c",
+      "line_channel_access_token": "k+0IfW3l/pybY74pGoOM+moBNhLALCcS6Wp3nSMqByoYy5ru1LdxYzMQ4jaXK/e6AduMV17pPflQ360JYKUn6xBYEqTYTHL0HIo/f+Zoh8GUmDBUR8MMNkCiyDZoPrvEwkJ3wPKyOHYhUGW6Hux+QgdB04t89/1O/w1cDnyilFU=",
       "gdrive_folder": "台達1廠",
       "is_default": false
     }
-  ],
-  "_note": "LINE 憑證待小魚從 LINE Developers Console 取得後填入。每家需要: channel_id, channel_secret, channel_access_token"
+  ]
 }

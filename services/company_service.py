@@ -26,9 +26,8 @@ def init_companies():
         if c.get("line_channel_id"):
             _channel_map[c["line_channel_id"]] = c
 
-    # 如果資料庫裡的公司還沒有 LINE 憑證，嘗試從 companies.json 載入
-    if not _channel_map:
-        _load_from_config()
+    # 從 companies.json 補齊資料庫中缺少 LINE 憑證的公司
+    _load_from_config()
 
     logger.info(f"Companies loaded: {len(_company_cache)} total, "
                 f"{len(_channel_map)} with LINE credentials")
@@ -52,6 +51,9 @@ def _load_from_config():
             access_token = c.get("line_channel_access_token", "")
 
             if channel_id and channel_secret and access_token and cid:
+                # 跳過已有憑證的公司
+                if channel_id in _channel_map:
+                    continue
                 # 寫入資料庫
                 sm.update_company_line_credentials(
                     cid, channel_id, channel_secret, access_token
@@ -129,6 +131,23 @@ def get_access_token(company_id: int = None, channel_id: str = None) -> str:
 
     # Fallback 到環境變數
     return os.environ.get("LINE_CHANNEL_ACCESS_TOKEN", "")
+
+
+def resolve_by_signature(body: bytes, signature: str) -> Optional[dict]:
+    """用簽名比對找出是哪家公司的 webhook（多租戶核心路由）"""
+    import base64
+    import hashlib
+    import hmac as _hmac
+
+    for channel_id, company in _channel_map.items():
+        secret = company.get("line_channel_secret", "")
+        if not secret:
+            continue
+        mac = _hmac.new(secret.encode("utf-8"), body, hashlib.sha256)
+        expected = base64.b64encode(mac.digest()).decode("utf-8")
+        if _hmac.compare_digest(expected, signature):
+            return company
+    return None
 
 
 def get_gdrive_folder(company_id: int) -> str:

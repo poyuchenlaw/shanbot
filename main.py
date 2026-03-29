@@ -23,7 +23,7 @@ import state_manager as sm
 from services.line_service import LineService
 from services.company_service import (
     init_companies, resolve_company, get_channel_secret,
-    get_access_token, get_all_active_companies,
+    get_access_token, get_all_active_companies, resolve_by_signature,
 )
 from task_manager import (
     HeartbeatScheduler,
@@ -152,18 +152,17 @@ async def webhook(request: Request):
     except json.JSONDecodeError:
         return JSONResponse({"error": "Invalid JSON"}, status_code=400)
 
-    # LINE webhook payload 帶有 destination（= bot 的 user ID，可用來辨識 Channel）
-    destination = payload.get("destination", "")
+    # 多租戶路由：用簽名比對找出是哪家公司
+    company = resolve_by_signature(body, signature)
+    if not company:
+        # 開發模式 fallback（無 secret 時）
+        destination = payload.get("destination", "")
+        if not signature:
+            company = resolve_company()
+        else:
+            logger.warning(f"Webhook signature mismatch — no company matched")
+            return JSONResponse({"error": "Invalid signature"}, status_code=403)
 
-    # 嘗試用 destination 或 events 中的資訊判斷 Channel
-    channel_id = _resolve_channel_id(payload, destination)
-
-    # 簽名驗證（用對應 Channel 的 Secret）
-    if not verify_signature(body, signature, channel_id):
-        return JSONResponse({"error": "Invalid signature"}, status_code=403)
-
-    # 解析公司
-    company = resolve_company(channel_id=channel_id)
     company_id = company["id"]
 
     # 設定 LINE Service 的 context token
