@@ -1730,7 +1730,7 @@ async def _handle_menu_import() -> str:
 def _show_help() -> str:
     """顯示使用說明"""
     return (
-        "🍳 小膳 Bot v2.7 使用說明\n"
+        "🍳 小膳 Bot v3.0 使用說明（五公司版）\n"
         "━━━━━━━━━━━━━━\n"
         "\n"
         "💡 點選下方「📋 小膳功能選單」\n"
