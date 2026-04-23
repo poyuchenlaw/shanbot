@@ -54,8 +54,15 @@ def _has_local_image(staging: dict) -> bool:
 
 
 def classify(staging: dict, threshold: float) -> str:
-    """auto | repush | discard_candidate"""
+    """auto | repush
+
+    auto：conf ≥ threshold + 無缺欄位 + 有圖檔 + 金額在合理區間 (0, 100_000]
+    其他：repush（含金額異常如負數、零、超過 $100K 的 outlier）
+    """
     if _missing_fields(staging) or not _has_local_image(staging):
+        return "repush"
+    amt = staging.get("total_amount") or 0
+    if amt <= 0 or amt > 100_000:
         return "repush"
     conf = staging.get("ocr_confidence") or 0
     if conf >= threshold:
