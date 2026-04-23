@@ -28,6 +28,8 @@ module.exports = {
       env: {
         PYTHONUNBUFFERED: '1',
         PYTHONPATH: __dirname,
+        // Simon 本人 LINE userId（reconcile 時確認所有公司 pending 都對到這個 ID）
+        SHANBOT_ADMIN_LINE_ID: 'U2a551ae0489009eb31a864860504b804',
       },
       error_file: path.join(__dirname, 'logs', 'watchdog.err.log'),
       out_file: path.join(__dirname, 'logs', 'watchdog.out.log'),
