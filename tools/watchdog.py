@@ -140,9 +140,12 @@ def push_to_admin(alerts: list[dict], dry_run: bool):
         return
 
     try:
+        from services.company_service import init_companies
+        init_companies()
         from services.line_service import LineService
         line = LineService()
-        ok = line.push(admin_id, msg)
+        # 告警走公司 1 (福利社) 的 token 推給 admin
+        ok = line.push(admin_id, msg, company_id=1)
         print(f"LINE 推送 {'成功' if ok else '失敗'}")
     except Exception as e:
         print(f"LINE 推送 EXC: {e}")
