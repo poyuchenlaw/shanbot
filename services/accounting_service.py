@@ -26,7 +26,7 @@ import state_manager as sm
 logger = logging.getLogger("shanbot.accounting")
 
 # GDrive mount path
-GDRIVE_BASE = os.environ.get("GDRIVE_MOUNT", "/mnt/h/我的雲端硬碟")
+GDRIVE_BASE = os.environ.get("GDRIVE_MOUNT", "/mnt/h")
 ACCOUNTING_DIR = os.path.join(GDRIVE_BASE, "小膳", "會計帳冊")
 
 # 會計科目對照（進貨分類 → 會計科目）

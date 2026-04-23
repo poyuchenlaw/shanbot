@@ -565,7 +565,7 @@ def build_finance_menu() -> dict:
 #  格子 3: 🛒 採購管理
 # ========================================================
 
-def build_purchase_menu(pending_count: int = 0) -> dict:
+def build_purchase_menu(pending_count: int = 0, pending_unrecognized: int = 0) -> dict:
     badge = f" [{pending_count} 筆]" if pending_count else ""
     return {
         "type": "bubble", "size": "mega",
@@ -924,6 +924,67 @@ def build_report_period_picker(report_type: str) -> dict:
                     color=COLOR_SECONDARY,
                     display_text=f"生成{label} {prev_ym}"),
             ],
+        },
+    }
+
+
+def build_report_confirmation_flex(
+    confirmation_id: int, period: str, report_type: str,
+    summary: dict = None, gdrive_path: str = "",
+) -> dict:
+    """報表生成確認 Flex（含摘要資訊 + GDrive 路徑）"""
+    type_labels = {
+        "monthly": "月報表",
+        "annual": "年度報表",
+        "balance_sheet": "資產負債表",
+        "income_statement": "損益表",
+        "cash_flow": "現金流量表",
+        "equity_changes": "權益變動表",
+        "mof_txt": "進項媒體申報",
+        "accounting": "會計匯出",
+        "handler_cert": "經手人證明",
+    }
+    label = type_labels.get(report_type, report_type)
+    summary = summary or {}
+
+    body_contents = [
+        {
+            "type": "text", "text": f"✅ {label}已生成",
+            "weight": "bold", "size": "md", "color": COLOR_TEXT,
+        },
+        {
+            "type": "text", "text": f"期間：{period}",
+            "size": "sm", "color": COLOR_TEXT_SUB, "margin": "sm",
+        },
+    ]
+
+    # 摘要資訊
+    total_count = summary.get("total_count", 0) or 0
+    total_amount = summary.get("total_amount", 0) or 0
+    if total_count:
+        try:
+            body_contents.append({
+                "type": "text",
+                "text": f"共 {int(total_count)} 筆 / ${float(total_amount):,.0f}",
+                "size": "sm", "color": COLOR_TEXT_SUB, "margin": "sm",
+            })
+        except (TypeError, ValueError):
+            pass
+
+    if gdrive_path:
+        body_contents.append({
+            "type": "text",
+            "text": f"📁 已同步至 GDrive",
+            "size": "xs", "color": COLOR_BLUE, "margin": "md",
+        })
+
+    return {
+        "type": "bubble", "size": "kilo",
+        "header": _header_box(f"📊 {label}", ""),
+        "body": {
+            "type": "box", "layout": "vertical",
+            "paddingAll": "16px", "spacing": "sm",
+            "contents": body_contents,
         },
     }
 

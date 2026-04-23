@@ -213,6 +213,102 @@ class MonthlySummaryScheduler(BaseScheduler):
             logger.error(f"Monthly summary error: {e}", exc_info=True)
 
 
+class MonthEndAnalysisScheduler(BaseScheduler):
+    """每月最後一天 20:00 自動跑完整做賬 + 財務分析報告
+
+    自動偵測是否為月底，執行：
+    1. 完整做賬 Pipeline（確認→分錄→報表→稽核→結帳）
+    2. 月度財務分析報告（趨勢+風險+建議）
+    3. 推送摘要到 LINE 群組
+    """
+
+    def __init__(self, line_service, target_chat_id: str = ""):
+        super().__init__("month-end-analysis-20:00")
+        self.line_service = line_service
+        self.target_chat_id = target_chat_id
+
+    async def _loop(self):
+        import calendar
+
+        while self._running:
+            now = datetime.now()
+            y, m = now.year, now.month
+            last_day = calendar.monthrange(y, m)[1]
+
+            # 計算到本月最後一天 20:00
+            target = now.replace(day=last_day, hour=20, minute=0, second=0, microsecond=0)
+            if now >= target:
+                # 已過本月月底 → 等下個月
+                if m == 12:
+                    next_y, next_m = y + 1, 1
+                else:
+                    next_y, next_m = y, m + 1
+                next_last_day = calendar.monthrange(next_y, next_m)[1]
+                target = now.replace(year=next_y, month=next_m, day=next_last_day,
+                                     hour=20, minute=0, second=0, microsecond=0)
+
+            wait = (target - now).total_seconds()
+            logger.info(f"MonthEndAnalysis: next run on {target.strftime('%Y-%m-%d %H:%M')}, "
+                        f"in {wait/86400:.1f}d")
+            await asyncio.sleep(wait)
+
+            if self._running:
+                await self._execute()
+
+    async def _execute(self):
+        """月底自動執行：做賬 + 財務分析 + 推送"""
+        try:
+            year_month = datetime.now().strftime("%Y-%m")
+            logger.info(f"MonthEndAnalysis: starting for {year_month}")
+
+            # 1. 完整做賬 Pipeline
+            from services.pipeline_service import run_full_pipeline, format_pipeline_summary
+            pipeline_result = run_full_pipeline(
+                year_month=year_month,
+                auto_confirm=True,
+                skip_tax_export=True,  # 月底不做稅務匯出（雙月才需要）
+            )
+            pipeline_summary = format_pipeline_summary(pipeline_result)
+            logger.info(f"MonthEndAnalysis: pipeline done - "
+                        f"{'SUCCESS' if pipeline_result['overall_success'] else 'PARTIAL'}")
+
+            # 2. 財務分析報告
+            from services.financial_analysis_service import (
+                generate_monthly_analysis, generate_analysis_excel,
+            )
+            analysis = generate_monthly_analysis(year_month)
+            analysis_path = generate_analysis_excel(year_month)
+            logger.info(f"MonthEndAnalysis: analysis generated - {len(analysis['risks'])} risks")
+
+            # 3. 推送到 LINE
+            if self.line_service and self.target_chat_id:
+                # 推送財務分析摘要
+                msg = analysis["summary_text"]
+                self.line_service.push_message(self.target_chat_id, msg)
+
+                # 推送 Pipeline 狀態（精簡版）
+                status_msg = (
+                    f"📋 {year_month} 月底自動結帳完成\n"
+                    f"{'✅ 全部成功' if pipeline_result['overall_success'] else '⚠️ 部分異常'}\n"
+                    f"產出 {len(pipeline_result['files_generated'])} 個報表檔案"
+                )
+                self.line_service.push_message(self.target_chat_id, status_msg)
+
+            logger.info(f"MonthEndAnalysis: complete for {year_month}")
+
+        except Exception as e:
+            logger.error(f"MonthEndAnalysis error: {e}", exc_info=True)
+            # 錯誤也推送通知
+            if self.line_service and self.target_chat_id:
+                try:
+                    self.line_service.push_message(
+                        self.target_chat_id,
+                        f"⚠️ 月底自動做賬發生錯誤：{str(e)[:200]}"
+                    )
+                except Exception:
+                    pass
+
+
 class WebhookGuardScheduler(BaseScheduler):
     """每 6 小時驗證 LINE webhook URL 是否正確，異常則自動修復。
 

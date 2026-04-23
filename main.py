@@ -24,23 +24,28 @@ from services.line_service import LineService
 from services.company_service import (
     init_companies, resolve_company, get_channel_secret,
     get_access_token, get_all_active_companies, resolve_by_signature,
+    resolve_by_destination,
 )
 from task_manager import (
     HeartbeatScheduler,
     MarketSyncScheduler,
     MonthlySummaryScheduler,
+    MonthEndAnalysisScheduler,
     WebhookGuardScheduler,
     ExternalAPIGuardScheduler,
 )
 
-# Logging
+# Logging — 確保 logs 目錄存在
+_LOG_DIR = os.path.join(os.path.dirname(__file__), "logs")
+os.makedirs(_LOG_DIR, exist_ok=True)
+
 logging.basicConfig(
     level=getattr(logging, os.environ.get("LOG_LEVEL", "INFO")),
     format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
     handlers=[
         logging.StreamHandler(sys.stdout),
         logging.FileHandler(
-            os.path.join(os.path.dirname(__file__), "logs", "out.log"),
+            os.path.join(_LOG_DIR, "out.log"),
             encoding="utf-8",
         ),
     ],
@@ -107,6 +112,9 @@ async def lifespan(app: FastAPI):
     monthly = MonthlySummaryScheduler(line_service, primary_group)
     monthly.start()
 
+    month_end = MonthEndAnalysisScheduler(line_service, primary_group)
+    month_end.start()
+
     webhook_guard = WebhookGuardScheduler()
     webhook_guard.start()
 
@@ -153,15 +161,24 @@ async def webhook(request: Request):
         return JSONResponse({"error": "Invalid JSON"}, status_code=400)
 
     # 多租戶路由：用簽名比對找出是哪家公司
+    destination = payload.get("destination", "")
     company = resolve_by_signature(body, signature)
     if not company:
-        # 開發模式 fallback（無 secret 時）
-        destination = payload.get("destination", "")
         if not signature:
+            # 開發模式 fallback（無 secret 時）
             company = resolve_company()
         else:
-            logger.warning(f"Webhook signature mismatch — no company matched")
-            return JSONResponse({"error": "Invalid signature"}, status_code=403)
+            # Signature 失敗 → 嘗試用 destination (bot userId) fallback
+            company = resolve_by_destination(destination)
+            if company:
+                logger.warning(f"Signature mismatch, destination fallback → "
+                              f"{company['short_name']} (dest={destination}). "
+                              f"請確認該 Channel Secret 是否已更換！")
+            else:
+                logger.warning(f"Webhook rejected — signature mismatch, destination unknown. "
+                              f"dest={destination}, sig={signature[:16]}..., "
+                              f"events={[e.get('type','?') for e in payload.get('events',[])]}")
+                return JSONResponse({"error": "Invalid signature"}, status_code=403)
 
     company_id = company["id"]
 

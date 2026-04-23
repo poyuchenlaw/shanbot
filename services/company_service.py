@@ -12,14 +12,17 @@ logger = logging.getLogger("shanbot.company")
 # === 快取：Channel ID → Company 映射（啟動時載入） ===
 _channel_map: dict[str, dict] = {}
 _company_cache: dict[int, dict] = {}
+# Bot userId → Company 映射（啟動時自動建立，用於 destination fallback）
+_bot_user_map: dict[str, int] = {}
 
 
 def init_companies():
     """啟動時載入所有公司設定到快取"""
-    global _channel_map, _company_cache
+    global _channel_map, _company_cache, _bot_user_map
     companies = sm.get_all_companies()
     _company_cache.clear()
     _channel_map.clear()
+    _bot_user_map.clear()
 
     for c in companies:
         _company_cache[c["id"]] = c
@@ -29,12 +32,15 @@ def init_companies():
     # 從 companies.json 補齊資料庫中缺少 LINE 憑證的公司
     _load_from_config()
 
+    # 自動建立 bot userId → company 映射（用各公司 token 查詢 bot info）
+    _build_bot_user_map()
+
     logger.info(f"Companies loaded: {len(_company_cache)} total, "
                 f"{len(_channel_map)} with LINE credentials")
 
 
 def _load_from_config():
-    """從 config/companies.json 載入（backup source）"""
+    """從 config/companies.json 載入（補齊 DB 中缺少的公司或憑證）"""
     config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)),
                                "config", "companies.json")
     if not os.path.exists(config_path):
@@ -50,23 +56,64 @@ def _load_from_config():
             channel_secret = c.get("line_channel_secret", "")
             access_token = c.get("line_channel_access_token", "")
 
-            if channel_id and channel_secret and access_token and cid:
-                # 跳過已有憑證的公司
-                if channel_id in _channel_map:
-                    continue
-                # 寫入資料庫
-                sm.update_company_line_credentials(
-                    cid, channel_id, channel_secret, access_token
-                )
-                # 更新快取
-                if cid in _company_cache:
-                    _company_cache[cid]["line_channel_id"] = channel_id
-                    _company_cache[cid]["line_channel_secret"] = channel_secret
-                    _company_cache[cid]["line_channel_access_token"] = access_token
-                    _channel_map[channel_id] = _company_cache[cid]
-                    logger.info(f"Loaded LINE credentials for company {cid} from config")
+            if not (channel_id and channel_secret and access_token and cid):
+                continue
+
+            # 如果 channel 已在 _channel_map 且憑證一致，跳過
+            existing = _channel_map.get(channel_id)
+            if existing and existing.get("line_channel_secret") == channel_secret:
+                continue
+
+            # 新公司或憑證更新 → 寫入資料庫 + 更新快取
+            sm.update_company_line_credentials(
+                cid, channel_id, channel_secret, access_token
+            )
+
+            if cid not in _company_cache:
+                # 資料庫中沒有這家公司 → 從 config 建立
+                _company_cache[cid] = {
+                    "id": cid,
+                    "short_name": c.get("short_name", f"Company-{cid}"),
+                    "full_name": c.get("full_name", ""),
+                    "tax_id": c.get("tax_id", ""),
+                    "gdrive_folder": c.get("gdrive_folder", "福利社"),
+                    "is_default": c.get("is_default", False),
+                }
+
+            _company_cache[cid]["line_channel_id"] = channel_id
+            _company_cache[cid]["line_channel_secret"] = channel_secret
+            _company_cache[cid]["line_channel_access_token"] = access_token
+            _channel_map[channel_id] = _company_cache[cid]
+            logger.info(f"Synced LINE credentials for [{cid}] {c.get('short_name', '')} from config")
+
     except Exception as e:
         logger.warning(f"Failed to load companies.json: {e}")
+
+
+def _build_bot_user_map():
+    """啟動時用各公司 token 查 bot info，建立 bot userId → company_id 映射"""
+    global _bot_user_map
+    import requests
+
+    for channel_id, company in _channel_map.items():
+        token = company.get("line_channel_access_token", "")
+        if not token:
+            continue
+        try:
+            resp = requests.get(
+                "https://api.line.me/v2/bot/info",
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=5,
+            )
+            if resp.status_code == 200:
+                bot_user_id = resp.json().get("userId", "")
+                if bot_user_id:
+                    _bot_user_map[bot_user_id] = company["id"]
+        except Exception:
+            pass  # 網路問題不影響啟動
+
+    if _bot_user_map:
+        logger.info(f"Bot user map built: {len(_bot_user_map)} bots registered")
 
 
 def reload_companies():
@@ -77,12 +124,7 @@ def reload_companies():
 # === 路由 ===
 
 def resolve_company(channel_id: str = None, chat_id: str = None) -> dict:
-    """從 Channel ID 或 chat_id 解析對應公司
-
-    優先用 channel_id（LINE webhook 帶入），
-    fallback 用 chat_id 查 conversation_state，
-    最終 fallback 到預設公司。
-    """
+    """從 Channel ID 或 chat_id 解析對應公司"""
     if channel_id and channel_id in _channel_map:
         return _channel_map[channel_id]
 
@@ -113,8 +155,7 @@ def get_channel_secret(channel_id: str) -> str:
     company = _channel_map.get(channel_id)
     if company:
         return company.get("line_channel_secret", "")
-    # Fallback 到環境變數（相容舊的單一公司設定）
-    return os.environ.get("LINE_CHANNEL_SECRET", "")
+    return ""
 
 
 def get_access_token(company_id: int = None, channel_id: str = None) -> str:
@@ -129,12 +170,15 @@ def get_access_token(company_id: int = None, channel_id: str = None) -> str:
         if token:
             return token
 
-    # Fallback 到環境變數
-    return os.environ.get("LINE_CHANNEL_ACCESS_TOKEN", "")
+    return ""
 
 
 def resolve_by_signature(body: bytes, signature: str) -> Optional[dict]:
-    """用簽名比對找出是哪家公司的 webhook（多租戶核心路由）"""
+    """用簽名比對找出是哪家公司的 webhook（多租戶核心路由）
+
+    遍歷所有已註冊 channel，用各自的 secret 計算 HMAC-SHA256，
+    與 LINE 送來的 X-Line-Signature 比對。
+    """
     import base64
     import hashlib
     import hmac as _hmac
@@ -147,6 +191,18 @@ def resolve_by_signature(body: bytes, signature: str) -> Optional[dict]:
         expected = base64.b64encode(mac.digest()).decode("utf-8")
         if _hmac.compare_digest(expected, signature):
             return company
+    return None
+
+
+def resolve_by_destination(destination: str) -> Optional[dict]:
+    """用 destination (bot userId) 找出對應公司 — signature 失敗時的 fallback
+
+    destination 是 LINE webhook payload 中的 bot userId，
+    與 _bot_user_map（啟動時自動建立）比對。
+    """
+    company_id = _bot_user_map.get(destination)
+    if company_id:
+        return _company_cache.get(company_id)
     return None
 
 

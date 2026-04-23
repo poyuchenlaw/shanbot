@@ -25,7 +25,7 @@ async def handle_postback(line_service, data_str: str, group_id: str,
 
     # === 六宮格主選單 ===
     if menu:
-        flex = _handle_menu(menu, group_id)
+        flex = _handle_menu(menu, group_id, company_id)
         if flex:
             line_service.reply_flex(reply_token, _alt_text(menu), flex)
             return
@@ -77,7 +77,7 @@ async def handle_postback(line_service, data_str: str, group_id: str,
 
 # === 六宮格主選單 ===
 
-def _handle_menu(menu: str, group_id: str = None) -> dict | None:
+def _handle_menu(menu: str, group_id: str = None, company_id: int = None) -> dict | None:
     if menu == "camera":
         return fb.build_camera_menu()
     elif menu == "finance":
@@ -85,7 +85,7 @@ def _handle_menu(menu: str, group_id: str = None) -> dict | None:
     elif menu == "finance_upload":
         return fb.build_finance_upload_menu()
     elif menu == "purchase":
-        pendings = sm.get_pending_stagings(group_id)
+        pendings = sm.get_pending_stagings(group_id, company_id=company_id)
         pending_count = len(pendings)
         pending_unrecognized = sum(
             1 for p in pendings if (p.get("ocr_confidence") or 0) < 0.85
