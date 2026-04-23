@@ -92,12 +92,15 @@ def _scan_company_month(company_id: int, year_month: str) -> dict:
     base = get_company_base_path(company_id)
     _scan_dir_for_receipts(os.path.join(base, year, month_seg, "收據憑證"), found, "")
 
-    root_month = os.path.join(GDRIVE_LOCAL, year, month_seg, "收據憑證")
-    fallback_found: dict[int, dict] = {}
-    _scan_dir_for_receipts(root_month, fallback_found, "ROOT")
-    for sid, info in fallback_found.items():
-        if sid not in found:
-            found[sid] = info
+    # 根目錄 fallback 只對公司 1 (default) 生效，避免多公司 reconcile 時
+    # 把公司 1 的檔誤判成其他公司的 FS-only
+    if company_id == 1:
+        root_month = os.path.join(GDRIVE_LOCAL, year, month_seg, "收據憑證")
+        fallback_found: dict[int, dict] = {}
+        _scan_dir_for_receipts(root_month, fallback_found, "ROOT")
+        for sid, info in fallback_found.items():
+            if sid not in found:
+                found[sid] = info
 
     return found
 
