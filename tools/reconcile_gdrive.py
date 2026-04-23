@@ -233,6 +233,13 @@ def main():
     args = p.parse_args()
 
     sm.init_db()
+    # 沒 init_companies 的話 get_company_base_path() 公司 2-5 會 fallback 回
+    # GDRIVE_LOCAL，掃到公司 1 的歸檔誤判成 FS-only（2026-04-23 事故）
+    try:
+        from services.company_service import init_companies
+        init_companies()
+    except Exception as e:
+        print(f"⚠️ init_companies 失敗：{e}")
 
     companies = [args.company] if args.company else [1, 2, 3, 4, 5]
     all_diffs: list[dict] = []
