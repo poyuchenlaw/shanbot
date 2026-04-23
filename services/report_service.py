@@ -131,13 +131,17 @@ def generate_purchase_report(year_month: str, output_dir: str = None) -> Optiona
 
     # 儲存
     filepath = os.path.join(output_dir, f"採購報告_{year_month}.xlsx")
-    wb.save(filepath)
+    from services.excel_merge import save_with_shadow
+    save_with_shadow(wb, filepath)
     logger.info(f"Purchase report saved: {filepath}")
     return filepath
 
 
 def generate_monthly_report(year_month: str, output_dir: str = None) -> Optional[str]:
-    """生成月報表 Excel（暫存統整 + 分類匯總 + 憑證目錄）"""
+    """生成月報表 Excel（暫存統整 + 分類匯總 + 憑證目錄）
+
+    使用 save_with_shadow：保留使用者在 Excel 上手改的欄位、註記、狀態調整。
+    """
     stagings = sm.get_stagings_by_month(year_month)
     if not stagings:
         return None
@@ -176,7 +180,6 @@ def generate_monthly_report(year_month: str, output_dir: str = None) -> Optional
     ws1.append(["進項稅額", total_tax])
     ws1.append(["含稅總額", total_amount])
 
-    # 更新月度成本表
     sm.upsert_monthly_cost(
         year_month,
         ingredient_total=total_subtotal,
@@ -202,7 +205,8 @@ def generate_monthly_report(year_month: str, output_dir: str = None) -> Optional
         ])
 
     filepath = os.path.join(output_dir, f"月報表_{year_month}.xlsx")
-    wb.save(filepath)
+    from services.excel_merge import save_with_shadow
+    save_with_shadow(wb, filepath)
     logger.info(f"Monthly report saved: {filepath}")
     return filepath
 
@@ -305,6 +309,7 @@ def generate_annual_report(year: str, output_dir: str = None) -> Optional[str]:
         ws2.append([cat, data["account_code"], data["count"], data["amount"]])
 
     filepath = os.path.join(output_dir, f"年度報表_{year}.xlsx")
-    wb.save(filepath)
+    from services.excel_merge import save_with_shadow
+    save_with_shadow(wb, filepath)
     logger.info(f"Annual report saved: {filepath}")
     return filepath

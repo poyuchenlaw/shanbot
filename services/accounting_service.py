@@ -811,7 +811,8 @@ def generate_accounting_excel(year_month: str) -> str | None:
     ledger = sm.get_general_ledger(year_month)
     _write_general_ledger_sheet(ws8, ledger, year_month)
 
-    wb.save(filepath)
+    from services.excel_merge import save_with_shadow
+    save_with_shadow(wb, filepath)
     logger.info(f"Accounting Excel generated: {filepath}")
 
     # 更新月度會計總表

@@ -169,7 +169,8 @@ def generate_balance_sheet(year_month: str, output_dir: str = None) -> str | Non
 
     filename = f"{year_month}_資產負債表.xlsx"
     filepath = os.path.join(out, filename)
-    wb.save(filepath)
+    from services.excel_merge import save_with_shadow
+    save_with_shadow(wb, filepath)
     logger.info(f"Balance sheet generated: {filepath}")
     return filepath
 
@@ -277,7 +278,8 @@ def generate_income_statement(year_month: str, output_dir: str = None) -> str | 
 
     filename = f"{year_month}_損益表.xlsx"
     filepath = os.path.join(out, filename)
-    wb.save(filepath)
+    from services.excel_merge import save_with_shadow
+    save_with_shadow(wb, filepath)
     logger.info(f"Income statement generated: {filepath}")
     return filepath
 
@@ -381,7 +383,8 @@ def generate_cash_flow(year_month: str, output_dir: str = None) -> str | None:
 
     filename = f"{year_month}_現金流量表.xlsx"
     filepath = os.path.join(out, filename)
-    wb.save(filepath)
+    from services.excel_merge import save_with_shadow
+    save_with_shadow(wb, filepath)
     logger.info(f"Cash flow statement generated: {filepath}")
     return filepath
 
@@ -478,6 +481,7 @@ def generate_equity_changes(year_month: str, output_dir: str = None) -> str | No
 
     filename = f"{year_month}_權益變動表.xlsx"
     filepath = os.path.join(out, filename)
-    wb.save(filepath)
+    from services.excel_merge import save_with_shadow
+    save_with_shadow(wb, filepath)
     logger.info(f"Equity changes statement generated: {filepath}")
     return filepath

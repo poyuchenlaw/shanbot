@@ -377,7 +377,8 @@ def generate_salary_template(year_month: str) -> str:
     save_dir = os.path.join(base, year, month, "薪資表")
     os.makedirs(save_dir, exist_ok=True)
     filepath = os.path.join(save_dir, f"薪資表_{year_month}.xlsx")
-    wb.save(filepath)
+    from services.excel_merge import save_with_shadow
+    save_with_shadow(wb, filepath)
     logger.info(f"Salary template generated: {filepath}")
     return filepath
 
@@ -444,7 +445,8 @@ def generate_employee_template() -> str:
     save_dir = os.path.join(base, "員工資料")
     os.makedirs(save_dir, exist_ok=True)
     filepath = os.path.join(save_dir, "員工資料表.xlsx")
-    wb.save(filepath)
+    from services.excel_merge import save_with_shadow
+    save_with_shadow(wb, filepath)
     logger.info(f"Employee template generated: {filepath}")
     return filepath
 
@@ -921,7 +923,8 @@ def generate_menu_template(year_month: str) -> str:
     save_dir = os.path.join(base, str(year), month_str, "菜單企劃")
     os.makedirs(save_dir, exist_ok=True)
     filepath = os.path.join(save_dir, f"菜單_{year_month}.xlsx")
-    wb.save(filepath)
+    from services.excel_merge import save_with_shadow
+    save_with_shadow(wb, filepath)
     logger.info(f"Menu template generated: {filepath}")
     return filepath
 

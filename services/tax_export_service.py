@@ -384,7 +384,8 @@ def export_winton_excel(tax_period: str, output_dir: str) -> str:
 
     filename = f"WINTON_{tax_period}.xlsx"
     filepath = os.path.join(output_dir, filename)
-    wb.save(filepath)
+    from services.excel_merge import save_with_shadow
+    save_with_shadow(wb, filepath)
 
     # 記錄匯出紀錄
     sm.add_tax_export(
