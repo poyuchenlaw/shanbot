@@ -194,6 +194,13 @@ async def cmd_line_repush(rows: list[dict], threshold: float, dry_run: bool, pag
     if dry_run:
         return
 
+    # LineService 需要 company_cache 先初始化才能取 token
+    try:
+        from services.company_service import init_companies
+        init_companies()
+    except Exception as e:
+        print(f"⚠️ init_companies 失敗：{e}")
+
     from services.line_service import LineService
     line = LineService()
 
