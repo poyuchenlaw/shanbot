@@ -14,7 +14,8 @@ module.exports = {
       },
       max_restarts: 10,
       restart_delay: 3000,
-      max_memory_restart: '400M',
+      // PaddleOCR 三引擎 warmup 後記憶體峰值約 350MB，留 buffer 避免假警報重啟
+      max_memory_restart: '600M',
       error_file: path.join(__dirname, 'logs', 'error.log'),
       out_file: path.join(__dirname, 'logs', 'out.log'),
     },
