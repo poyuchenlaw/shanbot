@@ -116,6 +116,16 @@ async def cmd_auto_confirm(rows: list[dict], threshold: float, dry_run: bool):
         print("沒有可自動確認的紀錄。")
         return
 
+    # 不 init 的話 get_company_base_path() 會 fallback 成公司 1 default
+    # → 所有公司的檔都會誤歸到 福利社/（重大 bug，2026-04-23 實際發生過）
+    if not dry_run:
+        try:
+            from services.company_service import init_companies
+            init_companies()
+        except Exception as e:
+            print(f"❌ init_companies 失敗，中止避免誤歸檔：{e}")
+            return
+
     print(f"\n{'DRY-RUN ' if dry_run else ''}將自動確認 + 歸檔 {len(targets)} 筆：")
     ok, fail = 0, 0
     for r in targets:
