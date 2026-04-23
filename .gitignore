@@ -9,9 +9,13 @@ logs/
 *.db-wal
 *.db-shm
 
-# Credentials
+# Credentials（含 LINE token 等敏感資料）
 config/.env
 .env
+config/companies.json
+
+# Worktrees（開發用隔離 clone）
+.worktrees/
 
 # OS
 .DS_Store
