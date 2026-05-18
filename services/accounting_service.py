@@ -27,7 +27,11 @@ logger = logging.getLogger("shanbot.accounting")
 
 # GDrive mount path
 GDRIVE_BASE = os.environ.get("GDRIVE_MOUNT", "/mnt/h")
-ACCOUNTING_DIR = os.path.join(GDRIVE_BASE, "小膳", "會計帳冊")
+_DEFAULT_ACCT = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "data", "exports", "會計帳冊"
+)
+ACCOUNTING_DIR = os.environ.get("ACCOUNTING_DIR", _DEFAULT_ACCT)
 
 # 會計科目對照（進貨分類 → 會計科目）
 CATEGORY_ACCOUNT_MAP = {
@@ -474,8 +478,11 @@ def generate_depreciation_entries(year_month: str) -> list[dict]:
 # 5. 期末結帳
 # =====================================================================
 
-def perform_period_end_closing(year_month: str) -> dict:
+def perform_period_end_closing(year_month: str, company_id: int = None) -> dict:
     """執行期末結帳
+
+    Args:
+        company_id: 指定公司 (None = 全公司合併)
 
     步驟：
     1. 調整分錄（折舊等已在各模組處理）
@@ -503,7 +510,7 @@ def perform_period_end_closing(year_month: str) -> dict:
     entry_date = f"{year_month}-{last_day}"
 
     # 取得試算表
-    trial = sm.get_trial_balance(year_month)
+    trial = sm.get_trial_balance(year_month, company_id=company_id)
 
     # 分類匯總
     total_revenue = 0  # 4xxx
@@ -521,7 +528,7 @@ def perform_period_end_closing(year_month: str) -> dict:
             total_expense += balance
 
     # 清除舊的結帳分錄
-    sm.delete_journal_entries_by_source("closing", 0)
+    sm.delete_journal_entries_by_source("closing", 0, company_id=company_id)
 
     entries = []
 
@@ -536,6 +543,7 @@ def perform_period_end_closing(year_month: str) -> dict:
                     description=f"結轉 {t['account_name']}",
                     account_code=code, account_name=t["account_name"],
                     debit=abs(t["balance"]), credit=0,
+                    company_id=company_id,
                 )
         sm.add_journal_entry(
             entry_date=entry_date, year_month=year_month,
@@ -543,6 +551,7 @@ def perform_period_end_closing(year_month: str) -> dict:
             description="結轉收入至本期損益",
             account_code="3300", account_name="本期損益",
             debit=0, credit=total_revenue,
+            company_id=company_id,
         )
         entries.append({"type": "revenue_close", "amount": total_revenue})
 
@@ -555,6 +564,7 @@ def perform_period_end_closing(year_month: str) -> dict:
             description="結轉成本費用至本期損益",
             account_code="3300", account_name="本期損益",
             debit=total_costs_expenses, credit=0,
+            company_id=company_id,
         )
         for t in trial:
             code = t.get("account_code", "")
@@ -565,6 +575,7 @@ def perform_period_end_closing(year_month: str) -> dict:
                     description=f"結轉 {t['account_name']}",
                     account_code=code, account_name=t["account_name"],
                     debit=0, credit=t["balance"],
+                    company_id=company_id,
                 )
         entries.append({"type": "expense_close", "amount": total_costs_expenses})
 
@@ -594,8 +605,11 @@ def perform_period_end_closing(year_month: str) -> dict:
 # 6. 財務報表
 # =====================================================================
 
-def generate_income_statement(year_month: str) -> dict:
+def generate_income_statement(year_month: str, company_id: int = None) -> dict:
     """損益表（Income Statement / P&L）
+
+    Args:
+        company_id: 指定公司 (None = 全公司合併)
 
     營業收入
     - 營業成本（進貨等）
@@ -603,7 +617,7 @@ def generate_income_statement(year_month: str) -> dict:
     - 營業費用（薪資/租金/水電/折舊等）
     = 營業淨利
     """
-    trial = sm.get_trial_balance(year_month)
+    trial = sm.get_trial_balance(year_month, company_id=company_id)
 
     revenue = 0
     cost = 0
@@ -644,12 +658,15 @@ def generate_income_statement(year_month: str) -> dict:
     }
 
 
-def generate_balance_sheet(year_month: str) -> dict:
+def generate_balance_sheet(year_month: str, company_id: int = None) -> dict:
     """資產負債表（Balance Sheet）
+
+    Args:
+        company_id: 指定公司 (None = 全公司合併)
 
     資產 = 負債 + 權益
     """
-    trial = sm.get_trial_balance(year_month)
+    trial = sm.get_trial_balance(year_month, company_id=company_id)
 
     assets = 0
     liabilities = 0
@@ -749,34 +766,47 @@ def get_vat_summary(tax_period: str) -> dict:
 # 8. 日記帳 Excel 生成（完整帳冊）
 # =====================================================================
 
-def generate_accounting_excel(year_month: str) -> str | None:
-    """生成月度會計 Excel（完整帳冊）
+def generate_accounting_excel(year_month: str, company_id: int = None,
+                              variant: str = "boss") -> str | None:
+    """生成月度會計 Excel（雙版本帳冊）
 
-    Sheet 1: 進貨日記帳
-    Sheet 2: 月度費用彙總
-    Sheet 3: 試算表
-    Sheet 4: 分錄明細
-    Sheet 5: 收入明細
-    Sheet 6: 損益表
-    Sheet 7: 資產負債表
-    Sheet 8: 總分類帳
+    Args:
+        year_month: YYYY-MM
+        company_id: 指定公司 (None = 全公司合併)
+        variant:
+            - "boss"  → 小魚決策帳冊（8 sheets，老闆/小魚/會計師用）
+            - "staff" → 員工驗章帳冊（4 sheets，員工日常勾稽，無會計術語）
+
+    backward compat: default="boss" 沿用所有既有 callsite。
 
     Returns: Excel 檔案路徑
     """
+    if variant not in ("boss", "staff"):
+        raise ValueError(f"variant must be 'boss' or 'staff', got {variant!r}")
+
+    if variant == "staff":
+        from services.staff_workbook_service import generate_staff_workbook
+        return generate_staff_workbook(year_month, company_id=company_id)
+
     out_dir = os.path.join(ACCOUNTING_DIR, year_month)
     _ensure_dir(out_dir)
-    filepath = os.path.join(out_dir, f"{year_month}_會計帳冊.xlsx")
+    company_suffix = f"_C{company_id}" if company_id else ""
+    filepath = os.path.join(out_dir, f"{year_month}_小魚決策帳冊{company_suffix}.xlsx")
 
-    stagings = sm.get_stagings_by_month(year_month)
-    journal_entries = sm.get_journal_entries(year_month)
-    trial_balance = sm.get_trial_balance(year_month)
-    income_rows = sm.get_income_summary(year_month)
+    stagings = sm.get_stagings_by_month(year_month, company_id=company_id)
+    journal_entries = sm.get_journal_entries(year_month, company_id=company_id)
+    trial_balance = sm.get_trial_balance(year_month, company_id=company_id)
+    income_rows = sm.get_income_summary(year_month, company_id=company_id)
 
     wb = openpyxl.Workbook()
 
+    # --- Sheet 0: 📋 索引（5/17 LV1 索引憲法）---
+    ws_idx = wb.active
+    ws_idx.title = "📋 索引"
+    _build_boss_index_sheet(ws_idx, year_month, company_id)
+
     # --- Sheet 1: 進貨日記帳 ---
-    ws1 = wb.active
-    ws1.title = "進貨日記帳"
+    ws1 = wb.create_sheet("進貨日記帳")
     _write_purchase_journal(ws1, stagings, year_month)
 
     # --- Sheet 2: 月度費用彙總 ---
@@ -798,17 +828,20 @@ def generate_accounting_excel(year_month: str) -> str | None:
 
     # --- Sheet 6: 損益表 ---
     ws6 = wb.create_sheet("損益表")
-    pl_data = generate_income_statement(year_month)
+    pl_data = generate_income_statement(year_month, company_id=company_id)
     _write_income_statement_sheet(ws6, pl_data)
 
     # --- Sheet 7: 資產負債表 ---
     ws7 = wb.create_sheet("資產負債表")
-    bs_data = generate_balance_sheet(year_month)
+    bs_data = generate_balance_sheet(year_month, company_id=company_id)
     _write_balance_sheet(ws7, bs_data)
 
     # --- Sheet 8: 總分類帳 ---
     ws8 = wb.create_sheet("總分類帳")
-    ledger = sm.get_general_ledger(year_month)
+    ledger = sorted(
+        journal_entries,
+        key=lambda e: (e.get("account_code", ""), e.get("entry_date", ""), e.get("id", 0)),
+    )
     _write_general_ledger_sheet(ws8, ledger, year_month)
 
     from services.excel_merge import save_with_shadow
@@ -1862,3 +1895,71 @@ def generate_training_document(output_dir: str = None) -> str:
     doc.save(filepath)
     logger.info(f"Training document generated: {filepath}")
     return filepath
+
+
+# =====================================================================
+# 老闆版索引 sheet（5/17 LV1 Excel 索引憲法）
+# =====================================================================
+
+def _build_boss_index_sheet(ws, year_month: str, company_id):
+    """套用 5/17 索引憲法：前 3-5 行說明區 + 分頁列表 + 對比價值"""
+    ws.column_dimensions["A"].width = 4
+    ws.column_dimensions["B"].width = 28
+    ws.column_dimensions["C"].width = 42
+    ws.column_dimensions["D"].width = 38
+
+    ws.merge_cells("A1:D1")
+    ws["A1"] = f"小魚決策帳冊 — {year_month}"
+    ws["A1"].font = Font(name="微軟正黑體", size=16, bold=True, color="FFFFFF")
+    ws["A1"].fill = _HEADER_FILL
+    ws["A1"].alignment = _CENTER
+    ws.row_dimensions[1].height = 30
+
+    ws.merge_cells("A2:D2")
+    ws["A2"] = "用途：小魚月結 / 老闆決策 / 會計師查核 / 報稅依據"
+    ws["A2"].font = Font(name="微軟正黑體", size=11, italic=True)
+    ws["A2"].alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+
+    ws.merge_cells("A3:D3")
+    ws["A3"] = ("本月診斷起手式：先看『損益表』看賺賠、"
+                "再看『資產負債表』看家底、最後比對『試算表』確認借貸")
+    ws["A3"].font = Font(name="微軟正黑體", size=11, bold=True, color="C62828")
+    ws["A3"].alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+    ws.row_dimensions[3].height = 22
+
+    company_label = f"公司 ID={company_id}" if company_id else "全公司合併"
+    gen_at = datetime.now().strftime("%Y-%m-%d %H:%M")
+    ws.merge_cells("A4:D4")
+    ws["A4"] = f"範圍：{company_label} ／ 期間：{year_month} ／ 產出時間：{gen_at}"
+    ws["A4"].font = Font(name="微軟正黑體", size=10, color="666666")
+    ws["A4"].alignment = Alignment(horizontal="left")
+
+    sheet_specs = [
+        ("進貨日記帳", "本月所有進貨明細（按日期排列）", "查單筆進貨找這頁"),
+        ("月度費用彙總", "按供應商彙總筆數 / 金額 / 稅額", "看哪家供應商花最多"),
+        ("試算表", "全科目借貸彙總（借貸平衡驗證）", "確認帳務無誤的第一道門"),
+        ("分錄明細", "所有複式分錄（含進貨/收入/薪資/折舊）", "查單筆分錄借貸去向"),
+        ("收入明細", "本月營業收入記錄", "看營收結構"),
+        ("損益表", "收入-成本-費用=本期淨利", "本月賺多少 / 賠多少"),
+        ("資產負債表", "資產=負債+權益（月底結存）", "公司家底有多少"),
+        ("總分類帳", "各科目 T 字帳 + 運行餘額", "查單一科目歷史軌跡"),
+    ]
+    headers = ["#", "分頁名稱", "分頁意義（這頁告訴你什麼）", "對比價值（為什麼這頁不可少）"]
+    for col_idx, h in enumerate(headers, 1):
+        cell = ws.cell(row=6, column=col_idx, value=h)
+        cell.font = _HEADER_FONT
+        cell.fill = _HEADER_FILL
+        cell.alignment = _CENTER
+        cell.border = _THIN_BORDER
+
+    for i, (name, meaning, value) in enumerate(sheet_specs, start=1):
+        r = 6 + i
+        ws.cell(row=r, column=1, value=i).font = _NORMAL_FONT
+        ws.cell(row=r, column=2, value=name).font = Font(name="微軟正黑體", size=10, bold=True)
+        ws.cell(row=r, column=3, value=meaning).font = _NORMAL_FONT
+        ws.cell(row=r, column=4, value=value).font = _NORMAL_FONT
+        ws.row_dimensions[r].height = 30
+        for col in range(1, 5):
+            c = ws.cell(row=r, column=col)
+            c.border = _THIN_BORDER
+            c.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
