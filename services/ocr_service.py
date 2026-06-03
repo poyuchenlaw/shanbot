@@ -154,8 +154,16 @@ def _check_numpy_faiss_compat() -> bool:
 
 
 def _get_paddle_engine():
-    """延遲載入 PaddleOCR PP-OCRv5（節省啟動記憶體）"""
+    """延遲載入 PaddleOCR PP-OCRv5。
+    2026-06-03: PaddleOCR 3.4.0 OneDNN PIR regression (ConvertPirAttribute2RuntimeAttribute not support).
+    FLAGS_enable_pir_in_executor / FLAGS_use_mkldnn / FLAGS_enable_new_ir_in_executor 全試過無解.
+    預設 SHANBOT_DISABLE_PADDLE=1 短路, Gemini VLM 接管. 修好後 unset 即可恢復.
+    """
     global _paddle_engine
+    import os as _os
+    if _os.environ.get("SHANBOT_DISABLE_PADDLE", "1") == "1":
+        _paddle_engine = "unavailable"
+        return None
     if _paddle_engine is None:
         # Pre-check: numpy 2.x + faiss 1.x = C-level crash (segfault)
         if not _check_numpy_faiss_compat():
@@ -225,10 +233,77 @@ def ocr_paddle(image_path: str) -> tuple[str, float]:
 
 # === Gemini VLM 引擎 ===
 
+_GEMINI_OCR_PROMPT = (
+    "請辨識這張台灣收據/對帳單/發票，以 JSON 回覆，schema：\n"
+    "{supplier_name, supplier_tax_id, invoice_prefix, invoice_number, invoice_type,\n"
+    " purchase_date (YYYY-MM-DD, 民國+1911=西元), subtotal, tax_amount, total_amount,\n"
+    " items:[{name, quantity, unit, unit_price, amount, is_handwritten:bool}]}\n"
+    "看不清楚的欄位填空字串或 0。只輸出 JSON 純值不要 markdown 圍欄。"
+)
+
+
+def _ocr_gemini_cli(image_path: str, cli_bin: str) -> Optional[dict]:
+    """Gemini CLI subprocess OCR via Ultra OAuth (no API key cost)."""
+    import subprocess
+    import shutil
+    import tempfile
+    try:
+        with tempfile.TemporaryDirectory(prefix="shanbot_gemini_") as td:
+            local_img = os.path.join(td, os.path.basename(image_path))
+            shutil.copy(image_path, local_img)
+            prompt = "@" + os.path.basename(local_img) + "\n" + _GEMINI_OCR_PROMPT
+            cmd = [cli_bin, "-p", prompt, "-m", "gemini-2.5-flash",
+                   "--yolo", "--skip-trust"]
+            env = os.environ.copy()
+            env["GEMINI_CLI_TRUST_WORKSPACE"] = "true"
+            r = subprocess.run(cmd, cwd=td, env=env, capture_output=True,
+                               text=True, timeout=90)
+            if r.returncode != 0:
+                logger.error(f"Gemini CLI exit={r.returncode} stderr={r.stderr[:200]}")
+                return None
+            return _parse_gemini_cli_stdout(r.stdout)
+    except subprocess.TimeoutExpired:
+        logger.error("Gemini CLI timeout (90s)")
+        return None
+    except Exception as e:
+        logger.error(f"Gemini CLI error: {e}")
+        return None
+
+
+def _parse_gemini_cli_stdout(out: str) -> Optional[dict]:
+    """Strip markdown fence, locate JSON object, parse."""
+    out = (out or "").strip()
+    if out.startswith("```"):
+        parts = out.split("```")
+        if len(parts) >= 2:
+            body = parts[1]
+            if body.startswith("json"):
+                body = body[4:]
+            out = body.strip()
+    i = out.find("{")
+    if i > 0:
+        out = out[i:]
+    j = out.rfind("}")
+    if j > 0:
+        out = out[:j + 1]
+    try:
+        result = json.loads(out)
+        logger.info(f"Gemini CLI VLM: {len(result.get('items', []))} items extracted")
+        return result
+    except Exception as e:
+        logger.error(f"Gemini CLI JSON parse failed: {e}; raw={out[:200]}")
+        return None
+
+
 def ocr_gemini(image_path: str) -> Optional[dict]:
-    """Gemini VLM 結構化提取 → JSON dict"""
+    """Gemini VLM 結構化提取 → JSON dict.
+    2026-06-03 預設走 Gemini CLI (Ultra OAuth)，API key 已撤銷不再用。
+    """
+    cli_path = os.environ.get("GEMINI_CLI_BIN", "/home/simon/.npm-global/bin/gemini")
+    if os.path.exists(cli_path):
+        return _ocr_gemini_cli(image_path, cli_path)
     if not GEMINI_API_KEY:
-        logger.warning("No GEMINI_API_KEY, skipping Gemini OCR")
+        logger.warning("No GEMINI_API_KEY and no Gemini CLI, skipping Gemini OCR")
         return None
 
     try:
