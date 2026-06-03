@@ -41,8 +41,8 @@ RICHMENU_JSON = {
         {
             "bounds": {"x": 0, "y": 843, "width": 833, "height": 843},
             "action": {
-                "type": "postback", "label": "菜單企劃",
-                "data": "menu=menu_plan", "displayText": "🍽️ 菜單企劃",
+                "type": "postback", "label": "問題反應",
+                "data": "menu=issue_feedback", "displayText": "📣 問題反應",
             },
         },
         {

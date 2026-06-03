@@ -23,6 +23,12 @@ async def handle_postback(line_service, data_str: str, group_id: str,
     menu = params.get("menu")
     action = params.get("action")
 
+    # === 問題反應 (5/17 LV1) ===
+    if menu == "issue_feedback":
+        from handlers.issue_feedback_handler import handle_postback_open
+        await handle_postback_open(line_service, group_id, user_id, reply_token, company_id)
+        return
+
     # === 六宮格主選單 ===
     if menu:
         flex = _handle_menu(menu, group_id, company_id)
@@ -876,5 +882,6 @@ def _alt_text(menu: str) -> str:
         "export": "📤 匯出中心",
         "reports": "📊 報表生成",
         "guide": "❓ 使用說明",
+        "issue_feedback": "📣 問題反應",
     }
     return labels.get(menu, "小膳選單")
