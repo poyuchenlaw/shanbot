@@ -444,7 +444,7 @@ async def archive_receipt(
 
     # 5. 更新月度總覽索引
     try:
-        update_master_index(year_month)
+        update_master_index(year_month, company_id=company_id)
     except Exception as e:
         logger.warning(f"Master index update failed: {e}")
 
@@ -478,25 +478,40 @@ def _append_index_csv(folder_path: str, row: dict):
     logger.info(f"INDEX.csv updated: {csv_path} (+1 row)")
 
 
-def update_master_index(year_month: str | None = None) -> str:
-    """掃描月份所有子資料夾，生成 INDEX_總覽.csv
+def _active_company_index_targets(company_id: int | None = None) -> list[tuple[int | None, str]]:
+    """Return company bases for index generation.
 
-    Args:
-        year_month: 如 '2026-03'，預設為本月
-
-    Returns:
-        INDEX_總覽.csv 的完整路徑
+    company_id=None means all active company folders. If company data is not
+    available, fall back to the historical single-tenant GDRIVE_LOCAL layout.
     """
+    if company_id is not None and company_id != 0:
+        return [(company_id, get_company_base_path(company_id))]
+
+    try:
+        import state_manager as sm
+        companies = sm.get_all_companies()
+    except Exception:
+        companies = []
+
+    targets: list[tuple[int | None, str]] = []
+    for company in companies:
+        cid = company.get("id")
+        folder = company.get("gdrive_folder", "")
+        if not cid or not folder:
+            continue
+        targets.append((cid, os.path.join(GDRIVE_LOCAL, folder)))
+
+    if targets:
+        return targets
+    return [(None, GDRIVE_LOCAL)]
+
+
+def _update_master_index_for_base(year_month: str, base_path: str) -> str:
+    """掃描單一 base 的月份子資料夾，生成 INDEX_總覽.csv"""
     import csv
 
-    if not year_month:
-        year_month = datetime.now().strftime("%Y-%m")
-
-    _, month_path = _year_month_path(year_month)
-
-    if not os.path.isdir(month_path):
-        logger.warning(f"update_master_index: {month_path} not found")
-        return ""
+    _, month_path = _year_month_path(year_month, base_path=base_path)
+    _init_company_month_structure(base_path, year_month)
 
     csv_path = os.path.join(month_path, "INDEX_總覽.csv")
     headers = ["類別", "子分類", "檔案名稱", "日期", "大小", "建立時間"]
@@ -550,21 +565,32 @@ def update_master_index(year_month: str | None = None) -> str:
     return csv_path
 
 
-def generate_annual_index(year: str | None = None) -> str:
-    """彙整全年各月 INDEX_總覽，生成 INDEX_年度總覽.csv
+def update_master_index(year_month: str | None = None, company_id: int | None = None) -> str:
+    """掃描月份所有子資料夾，生成 INDEX_總覽.csv
 
-    Args:
-        year: 如 '2026'，預設為今年
+    預設會掃描所有啟用公司，路徑為
+    {GDRIVE_LOCAL}/{公司}/{YYYY}/{MM月}/INDEX_總覽.csv。
+    傳入 company_id 時只更新該公司；沒有多租戶資料時保留舊單租戶行為。
 
     Returns:
-        INDEX_年度總覽.csv 的完整路徑
+        單一路徑，或多家公司時以換行分隔的路徑清單。
     """
+    if not year_month:
+        year_month = datetime.now().strftime("%Y-%m")
+
+    paths = []
+    for _cid, base_path in _active_company_index_targets(company_id):
+        path = _update_master_index_for_base(year_month, base_path)
+        if path:
+            paths.append(path)
+    return "\n".join(paths)
+
+
+def _generate_annual_index_for_base(year: str, base_path: str) -> str:
+    """彙整單一 base 全年各月 INDEX_總覽，生成 INDEX_年度總覽.csv"""
     import csv
 
-    if not year:
-        year = str(datetime.now().year)
-
-    year_path = os.path.join(GDRIVE_LOCAL, year)
+    year_path = os.path.join(base_path, year)
     if not os.path.isdir(year_path):
         logger.warning(f"generate_annual_index: {year_path} not found")
         return ""
@@ -585,7 +611,7 @@ def generate_annual_index(year: str | None = None) -> str:
         month_num = entry.replace("月", "").zfill(2)
         ym = f"{year}-{month_num}"
         try:
-            update_master_index(ym)
+            _update_master_index_for_base(ym, base_path)
         except Exception:
             pass
 
@@ -616,6 +642,26 @@ def generate_annual_index(year: str | None = None) -> str:
 
     logger.info(f"Annual index generated: {csv_path} ({len(rows)} files)")
     return csv_path
+
+
+def generate_annual_index(year: str | None = None, company_id: int | None = None) -> str:
+    """彙整全年各月 INDEX_總覽，生成 INDEX_年度總覽.csv
+
+    Args:
+        year: 如 '2026'，預設為今年
+
+    Returns:
+        單一路徑，或多家公司時以換行分隔的路徑清單。
+    """
+    if not year:
+        year = str(datetime.now().year)
+
+    paths = []
+    for _cid, base_path in _active_company_index_targets(company_id):
+        path = _generate_annual_index_for_base(year, base_path)
+        if path:
+            paths.append(path)
+    return "\n".join(paths)
 
 
 def get_folder_index(year_month: str | None = None) -> dict:

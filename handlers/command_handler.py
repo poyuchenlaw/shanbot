@@ -1432,16 +1432,18 @@ async def _generate_index() -> str:
         from services.gdrive_service import update_master_index
         csv_path = update_master_index(ym)
         if csv_path:
+            csv_paths = [p for p in csv_path.splitlines() if p]
             # 計算檔案數
             import csv as csv_module
             count = 0
+            cats = {}
             try:
-                with open(csv_path, "r", encoding="utf-8-sig") as f:
-                    reader = csv_module.DictReader(f)
-                    rows = list(reader)
-                    count = len(rows)
-                    # 統計各類別
-                    cats = {}
+                for path in csv_paths:
+                    with open(path, "r", encoding="utf-8-sig") as f:
+                        reader = csv_module.DictReader(f)
+                        rows = list(reader)
+                        count += len(rows)
+                        # 統計各類別
                     for r in rows:
                         cat = r.get("類別", "其他")
                         cats[cat] = cats.get(cat, 0) + 1
@@ -1469,11 +1471,13 @@ async def _generate_annual_index() -> str:
         from services.gdrive_service import generate_annual_index
         csv_path = generate_annual_index(year)
         if csv_path:
+            csv_paths = [p for p in csv_path.splitlines() if p]
             import csv as csv_module
             count = 0
             try:
-                with open(csv_path, "r", encoding="utf-8-sig") as f:
-                    count = sum(1 for _ in csv_module.DictReader(f))
+                for path in csv_paths:
+                    with open(path, "r", encoding="utf-8-sig") as f:
+                        count += sum(1 for _ in csv_module.DictReader(f))
             except Exception:
                 pass
             return (

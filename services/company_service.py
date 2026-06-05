@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+import sqlite3
 from typing import Optional
 
 import state_manager as sm
@@ -121,6 +122,44 @@ def reload_companies():
     init_companies()
 
 
+def _fetch_company_from_db(company_id: int) -> Optional[dict]:
+    """Fetch one company from DB and backfill the in-memory caches."""
+    try:
+        conn = sqlite3.connect(sm.DB_PATH)
+        conn.row_factory = sqlite3.Row
+        row = conn.execute("SELECT * FROM companies WHERE id=?", (company_id,)).fetchone()
+        conn.close()
+    except Exception as e:
+        logger.warning(f"Company DB lookup failed for id={company_id}: {e}")
+        return None
+
+    if not row:
+        return None
+
+    company = dict(row)
+    _company_cache[company_id] = company
+    channel_id = company.get("line_channel_id")
+    if channel_id:
+        _channel_map[channel_id] = company
+    return company
+
+
+def _get_company_cached_or_db(company_id: int | None) -> Optional[dict]:
+    """Return company from cache, querying DB on cache miss."""
+    if company_id is None:
+        return None
+    try:
+        cid = int(company_id)
+    except (TypeError, ValueError):
+        logger.warning(f"Invalid company_id for lookup: {company_id!r}")
+        return None
+
+    company = _company_cache.get(cid)
+    if company:
+        return company
+    return _fetch_company_from_db(cid)
+
+
 # === 路由 ===
 
 def resolve_company(channel_id: str = None, chat_id: str = None) -> dict:
@@ -141,13 +180,29 @@ def resolve_company(channel_id: str = None, chat_id: str = None) -> dict:
 
 
 def get_company_by_id(company_id: int) -> Optional[dict]:
-    """從快取取得公司"""
-    return _company_cache.get(company_id)
+    """取得公司；快取未初始化時直接查 DB 並回填快取"""
+    return _get_company_cached_or_db(company_id)
 
 
 def get_all_active_companies() -> list[dict]:
     """取得所有啟用的公司"""
-    return list(_company_cache.values())
+    if _company_cache:
+        return list(_company_cache.values())
+    try:
+        companies = sm.get_all_companies()
+    except Exception as e:
+        logger.warning(f"Company DB list lookup failed: {e}")
+        return []
+
+    for company in companies:
+        cid = company.get("id")
+        if not cid:
+            continue
+        _company_cache[cid] = company
+        channel_id = company.get("line_channel_id")
+        if channel_id:
+            _channel_map[channel_id] = company
+    return companies
 
 
 def get_channel_secret(channel_id: str) -> str:
@@ -160,8 +215,9 @@ def get_channel_secret(channel_id: str) -> str:
 
 def get_access_token(company_id: int = None, channel_id: str = None) -> str:
     """取得 Access Token（用於回覆/推送）"""
-    if company_id and company_id in _company_cache:
-        token = _company_cache[company_id].get("line_channel_access_token", "")
+    if company_id:
+        company = _get_company_cached_or_db(company_id)
+        token = company.get("line_channel_access_token", "") if company else ""
         if token:
             return token
 
@@ -208,7 +264,13 @@ def resolve_by_destination(destination: str) -> Optional[dict]:
 
 def get_gdrive_folder(company_id: int) -> str:
     """取得公司的 GDrive 資料夾名稱"""
-    company = _company_cache.get(company_id)
+    company = _get_company_cached_or_db(company_id)
     if company:
-        return company.get("gdrive_folder", "福利社")
+        folder = company.get("gdrive_folder")
+        if folder:
+            return folder
+        logger.warning(f"Company id={company_id} has empty gdrive_folder; fallback to 福利社")
+        return "福利社"
+
+    logger.warning(f"Company id={company_id} not found; fallback to 福利社")
     return "福利社"
