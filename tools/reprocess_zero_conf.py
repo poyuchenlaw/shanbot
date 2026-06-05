@@ -66,15 +66,29 @@ def fetch_rows(args: argparse.Namespace) -> list[dict[str, Any]]:
     conn = sm._get_conn()
     try:
         if args.all:
-            rows = conn.execute(
-                """
-                SELECT *
-                FROM purchase_staging
-                WHERE status = 'pending'
-                  AND ocr_confidence = 0
-                ORDER BY id
-                """
-            ).fetchall()
+            # --below X 時改抓 0 < conf < X 的舊引擎結果做升級重跑；預設只抓 0
+            max_conf = getattr(args, "below", None)
+            if max_conf is not None:
+                rows = conn.execute(
+                    """
+                    SELECT *
+                    FROM purchase_staging
+                    WHERE status = 'pending'
+                      AND ocr_confidence < ?
+                    ORDER BY id
+                    """,
+                    (max_conf,),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """
+                    SELECT *
+                    FROM purchase_staging
+                    WHERE status = 'pending'
+                      AND ocr_confidence = 0
+                    ORDER BY id
+                    """
+                ).fetchall()
             return [dict(row) for row in rows]
 
         rows_by_id: dict[int, dict[str, Any] | None] = {}
@@ -290,6 +304,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--all",
         action="store_true",
         help="Process all pending rows with ocr_confidence=0",
+    )
+    parser.add_argument(
+        "--below",
+        type=float,
+        default=None,
+        help="With --all: re-OCR pending rows with ocr_confidence < BELOW (upgrade old-engine results)",
     )
     parser.add_argument(
         "--workers",
