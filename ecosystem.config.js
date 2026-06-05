@@ -11,6 +11,7 @@ module.exports = {
       env: {
         PYTHONUNBUFFERED: '1',
         PYTHONPATH: __dirname,
+        SHANBOT_DISABLE_PADDLE: '1',
       },
       max_restarts: 10,
       restart_delay: 3000,

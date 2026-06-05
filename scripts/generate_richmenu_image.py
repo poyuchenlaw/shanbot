@@ -20,7 +20,7 @@ CELLS = [
     {"icon": "[ 拍 ]", "title": "拍照記帳",   "sub": "上傳收據辨識",  "bg": GREEN},
     {"icon": "[ 資 ]", "title": "財務資料",   "sub": "上傳/分類/確認", "bg": BROWN},
     {"icon": "[ 購 ]", "title": "採購管理",   "sub": "確認/修改/比價", "bg": GREEN},
-    {"icon": "[ 菜 ]", "title": "菜單企劃",   "sub": "AI 菜單/成本",  "bg": BROWN},
+    {"icon": "[ 問 ]", "title": "問題反應",   "sub": "AI 即時回覆",  "bg": BROWN},
     {"icon": "[ 表 ]", "title": "報表生成",   "sub": "四大報表/匯出", "bg": GREEN},
     {"icon": "[ 用 ]", "title": "使用說明",   "sub": "功能教學",      "bg": BROWN},
 ]

@@ -20,6 +20,10 @@ async def handle_text(line_service, text: str, group_id: str,
     # 1. 檢查對話狀態（state machine）
     state, state_data = sm.get_state(group_id)
 
+    if state == "waiting_issue_question":
+        from handlers.issue_feedback_handler import handle_question
+        return await handle_question(line_service, text, group_id, user_id, reply_token, company_id)
+
     if state == "waiting_confirm":
         return await _handle_confirm_response(text, group_id, state_data)
 
