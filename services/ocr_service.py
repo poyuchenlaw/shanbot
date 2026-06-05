@@ -231,6 +231,45 @@ def ocr_paddle(image_path: str) -> tuple[str, float]:
         return "", 0.0
 
 
+# === RapidOCR 引擎（onnxruntime 本地開源，PaddleOCR PIR 壞掉後的本地主力）===
+
+_rapid_engine = None
+
+
+def _get_rapid_engine():
+    """延遲載入 RapidOCR（onnxruntime backend，無 paddle runtime / numpy-faiss 衝突）"""
+    global _rapid_engine
+    if _rapid_engine is None:
+        try:
+            from rapidocr_onnxruntime import RapidOCR
+            _rapid_engine = RapidOCR()
+            logger.info("RapidOCR (onnxruntime) initialized")
+        except Exception as e:
+            logger.warning(f"RapidOCR unavailable: {e}")
+            _rapid_engine = "unavailable"
+    return _rapid_engine if _rapid_engine != "unavailable" else None
+
+
+def ocr_rapid(image_path: str) -> tuple[str, float]:
+    """RapidOCR 辨識 → (文字, 平均信心度)。與 ocr_paddle 同角色（raw text 引擎）。"""
+    engine = _get_rapid_engine()
+    if not engine:
+        return "", 0.0
+    try:
+        result, _ = engine(image_path)
+        if not result:
+            return "", 0.0
+        lines = [r[1] for r in result]
+        scores = [float(r[2]) for r in result]
+        full_text = "\n".join(lines)
+        avg_score = sum(scores) / len(scores) if scores else 0.0
+        logger.info(f"RapidOCR: {len(lines)} lines, avg confidence={avg_score:.3f}")
+        return full_text, avg_score
+    except Exception as e:
+        logger.error(f"RapidOCR error: {e}")
+        return "", 0.0
+
+
 # === Gemini VLM 引擎 ===
 
 _GEMINI_OCR_PROMPT = (
@@ -358,6 +397,54 @@ def ocr_gemini(image_path: str) -> Optional[dict]:
 
     except Exception as e:
         logger.error(f"Gemini OCR error: {e}")
+        return None
+
+
+# === Claude CLI VLM 引擎（訂閱 OAuth，Gemini CLI 2026-06-18 停服後的主力備援）===
+
+CLAUDE_CLI_BIN = os.environ.get("CLAUDE_CLI_BIN", "/home/simon/.npm-global/bin/claude")
+CLAUDE_OCR_MODEL = os.environ.get("CLAUDE_OCR_MODEL", "claude-sonnet-4-6")
+
+
+def ocr_claude(image_path: str) -> Optional[dict]:
+    """Claude Code CLI headless OCR → JSON dict（與 ocr_gemini 同 schema）。
+
+    走訂閱 OAuth（~/.claude），不消 API key。--settings '{"hooks":{}}' 停用使用者 hook
+    避免 stdout 汙染。模型用 sonnet（haiku 對中文單據誤讀已實測）。
+    """
+    import subprocess
+    import shutil
+    import tempfile
+    if not os.path.exists(CLAUDE_CLI_BIN):
+        logger.warning("Claude CLI not found, skipping Claude OCR")
+        return None
+    try:
+        with tempfile.TemporaryDirectory(prefix="shanbot_claude_") as td:
+            local_img = os.path.join(td, os.path.basename(image_path))
+            shutil.copy(image_path, local_img)
+            prompt = f"讀取圖片 {local_img}\n" + _GEMINI_OCR_PROMPT
+            cmd = [CLAUDE_CLI_BIN, "-p", prompt,
+                   "--model", CLAUDE_OCR_MODEL,
+                   "--allowedTools", "Read",
+                   "--settings", '{"hooks":{}}',
+                   "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}']
+            env = os.environ.copy()
+            # 跳過 dag_auto_capture 等重 hook（gemini 呼叫會卡 2+ 分鐘）
+            env["CLAUDE_HEADLESS_WORKER"] = "1"
+            r = subprocess.run(cmd, cwd=td, env=env, capture_output=True,
+                               text=True, timeout=150)
+            if r.returncode != 0:
+                logger.error(f"Claude CLI exit={r.returncode} stderr={r.stderr[:200]}")
+                return None
+            data = _parse_gemini_cli_stdout(r.stdout)
+            if data:
+                logger.info(f"Claude CLI VLM: {len(data.get('items', []))} items extracted")
+            return data
+    except subprocess.TimeoutExpired:
+        logger.error("Claude CLI timeout (150s)")
+        return None
+    except Exception as e:
+        logger.error(f"Claude CLI error: {e}")
         return None
 
 
@@ -517,14 +604,25 @@ def process_image(image_path: str) -> OcrResult:
     """
     result = OcrResult()
 
-    # Engine 1: PaddleOCR PP-OCRv5
+    # Engine 1: PaddleOCR PP-OCRv5（預設禁用）→ RapidOCR fallback
     paddle_text, paddle_confidence = ocr_paddle(image_path)
+    raw_engine = "PaddleOCR" if paddle_text else ""
+    if not paddle_text:
+        paddle_text, paddle_confidence = ocr_rapid(image_path)
+        raw_engine = "RapidOCR" if paddle_text else ""
     result.raw_text = paddle_text
 
-    # Engine 2: Gemini VLM
+    # Engine 2: Gemini VLM（CLI 訂閱）→ Claude CLI VLM fallback
+    vlm_engine = ""
     gemini_data = ocr_gemini(image_path)
+    if gemini_data:
+        vlm_engine = "Gemini"
+    else:
+        gemini_data = ocr_claude(image_path)
+        if gemini_data:
+            vlm_engine = "Claude"
 
-    # Engine 3: HunyuanOCR（僅在 Gemini 失敗時啟用）
+    # Engine 3: HunyuanOCR（僅在兩個 VLM 都失敗時啟用）
     hunyuan_text = None
     if not gemini_data:
         hunyuan_text = ocr_hunyuan(image_path)
@@ -537,6 +635,9 @@ def process_image(image_path: str) -> OcrResult:
         result.result_level = "REJECT"
         result.issues.append("所有 OCR 引擎都無法辨識")
         return result
+
+    if paddle_text and not gemini_data:
+        result.issues.append("VLM 引擎異常（照片可讀，系統問題非照片問題）")
 
     # 以 Gemini 結構化資料為主（更可靠）
     if gemini_data:
@@ -630,10 +731,10 @@ def process_image(image_path: str) -> OcrResult:
     _validate_fields(result)
 
     engines_used = []
-    if paddle_text:
-        engines_used.append("PaddleOCR")
-    if gemini_data:
-        engines_used.append("Gemini")
+    if raw_engine:
+        engines_used.append(raw_engine)
+    if vlm_engine:
+        engines_used.append(vlm_engine)
     if hunyuan_text:
         engines_used.append("HunyuanOCR")
     logger.info(
