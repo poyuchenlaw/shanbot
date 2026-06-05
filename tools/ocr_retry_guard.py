@@ -70,6 +70,7 @@ def acquire_lock() -> Any | None:
 def connect() -> sqlite3.Connection:
     conn = sqlite3.connect(sm.DB_PATH)
     conn.row_factory = sqlite3.Row
+    init_retry_log(conn)  # STALE_ZERO_SQL LEFT JOIN 帳本表，任何查詢（含 dry-run）前必須先建表
     return conn
 
 
