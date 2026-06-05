@@ -10,9 +10,28 @@ from pathlib import Path
 
 logger = logging.getLogger("shanbot.gdrive")
 
-_GDRIVE_BASE = os.environ.get(
-    "GDRIVE_LOCAL", "/mnt/h/我的雲端硬碟/小魚資料/團膳公司資料"
-)
+# 2026-06-05: 候選路徑探測（env GDRIVE_LOCAL 最優先）。
+# 台中 = Google Drive desktop H:\我的雲端硬碟\...；VPS = rclone 直掛 Drive root /mnt/h/小魚資料/...
+# 不可用「寫測試」選路徑：rclone 對任何路徑 mkdir+write 都「成功」（VFS 快取），
+# 會在雲端 root 長出平行假樹（6/5 事故：VPS 沿用台中硬編路徑假上雲）。
+# 探測改用 isdir 既有樹（福利社 為 5 公司必有資料夾），絕不建目錄。
+_GDRIVE_CANDIDATES = [
+    "/mnt/h/小魚資料/團膳公司資料",                 # VPS rclone（Drive root 直掛）
+    "/mnt/h/我的雲端硬碟/小魚資料/團膳公司資料",   # 台中 Google Drive desktop
+]
+
+
+def _detect_gdrive_base() -> str:
+    env = os.environ.get("GDRIVE_LOCAL")
+    if env:
+        return env
+    for c in _GDRIVE_CANDIDATES:
+        if os.path.isdir(os.path.join(c, "福利社")):
+            return c
+    return _GDRIVE_CANDIDATES[1]
+
+
+_GDRIVE_BASE = _detect_gdrive_base()
 _GDRIVE_PRIMARY = _GDRIVE_BASE  # 相容舊 API
 _GDRIVE_STAGING = "/home/simon/shanbot/data/gdrive_staging"
 
