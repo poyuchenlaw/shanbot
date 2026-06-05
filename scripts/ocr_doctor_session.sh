@@ -21,14 +21,17 @@ import sqlite3
 import state_manager as sm
 
 with sqlite3.connect(sm.DB_PATH) as conn:
+    conn.execute("CREATE TABLE IF NOT EXISTS ocr_retry_log (staging_id INTEGER PRIMARY KEY, attempts INTEGER DEFAULT 0, last_attempt TEXT, escalated INTEGER DEFAULT 0)")
     rows = conn.execute(
         """
-        SELECT id
-        FROM purchase_staging
-        WHERE status='pending'
-          AND ocr_confidence=0
-          AND created_at <= datetime('now','localtime','-20 minutes')
-        ORDER BY id
+        SELECT p.id
+        FROM purchase_staging p
+        LEFT JOIN ocr_retry_log r ON r.staging_id = p.id
+        WHERE p.status='pending'
+          AND p.ocr_confidence=0
+          AND p.created_at <= datetime('now','localtime','-20 minutes')
+          AND COALESCE(r.escalated, 0) = 0
+        ORDER BY p.id
         """
     ).fetchall()
 
@@ -47,15 +50,18 @@ import sqlite3
 import state_manager as sm
 
 with sqlite3.connect(sm.DB_PATH) as conn:
+    conn.execute("CREATE TABLE IF NOT EXISTS ocr_retry_log (staging_id INTEGER PRIMARY KEY, attempts INTEGER DEFAULT 0, last_attempt TEXT, escalated INTEGER DEFAULT 0)")
     row = conn.execute(
         """
-        SELECT local_image_path
-        FROM purchase_staging
-        WHERE status='pending'
-          AND ocr_confidence=0
-          AND created_at <= datetime('now','localtime','-20 minutes')
-          AND COALESCE(local_image_path, '') != ''
-        ORDER BY id
+        SELECT p.local_image_path
+        FROM purchase_staging p
+        LEFT JOIN ocr_retry_log r ON r.staging_id = p.id
+        WHERE p.status='pending'
+          AND p.ocr_confidence=0
+          AND p.created_at <= datetime('now','localtime','-20 minutes')
+          AND COALESCE(p.local_image_path, '') != ''
+          AND COALESCE(r.escalated, 0) = 0
+        ORDER BY p.id
         LIMIT 1
         """
     ).fetchone()
@@ -104,10 +110,12 @@ PY
 
 (b) 如果失敗，分層診斷：gemini CLI 驗活（echo test prompt）→ claude CLI 驗活 → rapidocr import → pm2 env 三鍵。
 (c) 可修項就地修，僅限：pm2 restart shanbot、重跑 python3 tools/reprocess_zero_conf.py --ids ${IDS:-0}。
-(d) 終局輸出固定格式：
+(d) 終局輸出固定格式（必須是你回覆的最後三行，輸出後立即結束）：
 DIAGNOSIS: <一段>
 FIXED: yes/no
 ACTION_NEEDED: <人類待辦或 none>
+
+紀律：全程禁止 spawn 背景任務/agent/長輪詢；每個指令逾時請設 120 秒上限；輸出 (d) 三行後不得再做任何事。
 EOF
 
 set +e
