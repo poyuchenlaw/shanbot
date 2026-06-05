@@ -8,7 +8,12 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
-GDRIVE_ROOT = "/mnt/h/我的雲端硬碟/小魚資料/團膳公司資料"
+# 2026-06-05: 改用 gdrive_service 自動偵測（台中=/mnt/h/我的雲端硬碟/...，VPS rclone=/mnt/h/...）
+# 硬編台中路徑在 VPS 真雲端不存在 → 5 月三份週報全卡 rclone VFS 快取假上雲
+try:
+    from services.gdrive_service import GDRIVE_LOCAL as GDRIVE_ROOT
+except Exception:
+    GDRIVE_ROOT = "/mnt/h/我的雲端硬碟/小魚資料/團膳公司資料"
 HFILL = PatternFill("solid", start_color="4472C4")
 HFONT = Font(bold=True, color="FFFFFF")
 SUB = PatternFill("solid", start_color="D9E2F3")

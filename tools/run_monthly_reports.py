@@ -8,7 +8,12 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 from datetime import datetime
 
-GDRIVE_ROOT = "/mnt/h/我的雲端硬碟/小魚資料/團膳公司資料"
+# 2026-06-05: 改用 gdrive_service 自動偵測（台中=/mnt/h/我的雲端硬碟/...，VPS rclone=/mnt/h/...）
+# 硬編台中路徑致 5 月報表在 VPS 假上雲（rclone VFS 快取）
+try:
+    from services.gdrive_service import GDRIVE_LOCAL as GDRIVE_ROOT
+except Exception:
+    GDRIVE_ROOT = "/mnt/h/我的雲端硬碟/小魚資料/團膳公司資料"
 HFILL = PatternFill("solid", start_color="4472C4")
 HFONT = Font(bold=True, color="FFFFFF")
 SUB = PatternFill("solid", start_color="D9E2F3")
