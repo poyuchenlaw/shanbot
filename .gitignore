@@ -34,3 +34,4 @@ venv/
 .pytest_cache/
 htmlcov/
 .coverage
+COLD_STANDBY_README.md
