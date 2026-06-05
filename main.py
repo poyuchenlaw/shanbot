@@ -31,6 +31,7 @@ from task_manager import (
     MarketSyncScheduler,
     MonthlySummaryScheduler,
     MonthEndAnalysisScheduler,
+    BiMonthlyTaxScheduler,
     WebhookGuardScheduler,
     ExternalAPIGuardScheduler,
 )
@@ -115,6 +116,9 @@ async def lifespan(app: FastAPI):
     month_end = MonthEndAnalysisScheduler(line_service, primary_group)
     month_end.start()
 
+    bimonthly_tax = BiMonthlyTaxScheduler(line_service, primary_group)
+    bimonthly_tax.start()
+
     webhook_guard = WebhookGuardScheduler()
     webhook_guard.start()
 
@@ -135,6 +139,8 @@ async def lifespan(app: FastAPI):
     heartbeat.stop()
     market_sync.stop()
     monthly.stop()
+    month_end.stop()
+    bimonthly_tax.stop()
     webhook_guard.stop()
     api_guard.stop()
     logger.info("小膳 Bot stopped")

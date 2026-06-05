@@ -309,6 +309,99 @@ class MonthEndAnalysisScheduler(BaseScheduler):
                     pass
 
 
+class BiMonthlyTaxScheduler(BaseScheduler):
+    """雙月 5 號 09:00 自動稅務匯出（5 公司各自匯出 MOF/WINTON/HANDLER_CERT）。
+
+    台灣 401 申報期：奇數月 1-15 申報前一雙月。
+    觸發：1/5、3/5、5/5、7/5、9/5、11/5 共 6 次/年。
+    """
+
+    def __init__(self, line_service, target_chat_id: str = ""):
+        super().__init__("bimonthly-tax-05-09:00")
+        self.line_service = line_service
+        self.target_chat_id = target_chat_id
+
+    async def _loop(self):
+        import calendar
+        while self._running:
+            now = datetime.now()
+            # 找下一個奇數月 5 號 09:00
+            y, m = now.year, now.month
+            target = None
+            for offset in range(0, 14):
+                ty = y + (m - 1 + offset) // 12
+                tm = ((m - 1 + offset) % 12) + 1
+                if tm % 2 == 1:  # 奇數月
+                    cand = datetime(ty, tm, 5, 9, 0, 0)
+                    if cand > now:
+                        target = cand
+                        break
+            if not target:
+                await asyncio.sleep(86400)
+                continue
+            wait = (target - now).total_seconds()
+            logger.info(f"BiMonthlyTax: next run on {target.strftime('%Y-%m-%d %H:%M')}, in {wait/86400:.1f}d")
+            await asyncio.sleep(wait)
+            if self._running:
+                await self._execute(target)
+
+    async def _execute(self, target_dt):
+        """執行雙月稅務匯出：稅期=前一雙月（如 3/5 跑 → 2026-01-02）"""
+        try:
+            import state_manager as sm
+            from services.tax_export_service import (
+                export_mof_txt, export_winton_excel, export_handler_cert,
+                validate_before_export,
+            )
+
+            # 計算稅期：當前月 -1 與 -2
+            y, m = target_dt.year, target_dt.month
+            end_m = m - 1 if m > 1 else 12
+            end_y = y if m > 1 else y - 1
+            start_m = end_m - 1
+            tax_period = f"{end_y}-{start_m:02d}-{end_m:02d}"
+
+            gdrive_root = os.environ.get(
+                "GDRIVE_LOCAL", "/mnt/h/我的雲端硬碟/小魚資料/團膳公司資料"
+            )
+            companies = [c for c in sm.get_all_companies() if c.get("is_active", 1)]
+            results = []
+            for co in companies:
+                cid = co["id"]
+                short = co.get("short_name") or f"C{cid}"
+                if not (co.get("tax_id") or "").strip():
+                    results.append(f"⚠️ {short}: 缺統編，跳過")
+                    continue
+                # 匯出目錄：{公司}/{年}/{雙月最後月}/稅務匯出/
+                out_dir = os.path.join(
+                    gdrive_root, short, str(end_y), f"{end_m:02d}月", "稅務匯出"
+                )
+                os.makedirs(out_dir, exist_ok=True)
+                ok, errs = validate_before_export(tax_period, company_id=cid)
+                if not ok:
+                    results.append(f"⚠️ {short}: {len(errs)} 項驗證錯誤（仍嘗試匯出）")
+                exported = []
+                for fn, label in [
+                    (export_mof_txt, "MOF"),
+                    (export_winton_excel, "WINTON"),
+                    (export_handler_cert, "HANDLER"),
+                ]:
+                    try:
+                        fp = fn(tax_period, out_dir, company_id=cid)
+                        exported.append(label)
+                    except Exception as e:
+                        results.append(f"❌ {short} {label}: {str(e)[:60]}")
+                if exported:
+                    results.append(f"✅ {short}: {','.join(exported)}")
+            logger.info(f"BiMonthlyTax done {tax_period}: {len(results)} entries")
+
+            if self.line_service and self.target_chat_id:
+                msg = f"📋 {tax_period} 雙月稅務匯出\n" + "\n".join(results[:20])
+                self.line_service.push_message(self.target_chat_id, msg)
+        except Exception as e:
+            logger.error(f"BiMonthlyTax error: {e}", exc_info=True)
+
+
 class WebhookGuardScheduler(BaseScheduler):
     """每 6 小時驗證 LINE webhook URL 是否正確，異常則自動修復。
 

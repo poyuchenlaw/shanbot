@@ -35,7 +35,7 @@ def run_full_pipeline(
 
     Args:
         year_month: 月份，如 "2026-03"
-        company_id: 指定公司（None = 全部）
+        company_id: 指定公司 (None = 全公司合併)
         auto_confirm: 是否自動確認 pending 單據
         skip_tax_export: 跳過稅務匯出（雙月才需要）
         skip_closing: 跳過期末結帳（還在月中不要結）
@@ -74,7 +74,7 @@ def run_full_pipeline(
     # ================================================================
     # Step 2: 月報表
     # ================================================================
-    step2 = _step_monthly_report(year_month, out_dir)
+    step2 = _step_monthly_report(year_month, out_dir, company_id)
     steps.append(step2)
     if step2.get("file"):
         files.append(step2["file"])
@@ -82,30 +82,30 @@ def run_full_pipeline(
     # ================================================================
     # Step 3: 採購報告
     # ================================================================
-    step3 = _step_purchase_report(year_month, out_dir)
+    step3 = _step_purchase_report(year_month, out_dir, company_id)
     steps.append(step3)
     if step3.get("file"):
         files.append(step3["file"])
 
     # ================================================================
-    # Step 4: 會計帳冊（8-sheet）
+    # Step 4: 會計帳冊（雙版本 — boss 小魚決策 + staff 員工驗章）
+    # Fail-Fast：任一版本失敗整批 rollback，不留半成品（會計 Atomicity 紅線）
     # ================================================================
-    step4 = _step_accounting_excel(year_month)
+    step4 = _step_accounting_excel(year_month, company_id)
     steps.append(step4)
-    if step4.get("file"):
-        files.append(step4["file"])
+    files.extend(step4.get("files", []))
 
     # ================================================================
     # Step 5: 四大財務報表
     # ================================================================
-    step5 = _step_financial_reports(year_month, out_dir)
+    step5 = _step_financial_reports(year_month, out_dir, company_id)
     steps.append(step5)
     files.extend(step5.get("files", []))
 
     # ================================================================
     # Step 6: 自動稽核（結帳前執行，確保數據完整性）
     # ================================================================
-    step6 = _step_audit(year_month, out_dir)
+    step6 = _step_audit(year_month, out_dir, company_id)
     steps.append(step6)
     if step6.get("file"):
         files.append(step6["file"])
@@ -114,7 +114,7 @@ def run_full_pipeline(
     # Step 7: 期末結帳（可選，稽核通過後再結帳）
     # ================================================================
     if not skip_closing:
-        step7 = _step_period_closing(year_month)
+        step7 = _step_period_closing(year_month, company_id)
         steps.append(step7)
     else:
         steps.append({"step": "period_closing", "status": "skipped"})
@@ -123,7 +123,7 @@ def run_full_pipeline(
     # Step 8: 稅務匯出（可選）
     # ================================================================
     if not skip_tax_export:
-        step8 = _step_tax_export(year_month, out_dir)
+        step8 = _step_tax_export(year_month, out_dir, company_id=company_id)
         steps.append(step8)
         files.extend(step8.get("files", []))
     else:
@@ -163,7 +163,11 @@ def run_full_pipeline(
 # =====================================================================
 
 def _step_confirm_and_journalize(year_month: str, company_id: int, auto_confirm: bool) -> dict:
-    """Step 1: 批次確認 pending → 生成複式分錄（進貨 + 收入）"""
+    """Step 1: 批次確認 pending → 生成複式分錄（進貨 + 收入）
+
+    Args:
+        company_id: 指定公司 (None = 全公司合併)
+    """
     from services.accounting_service import (
         generate_journal_entries, verify_balance, generate_income_journal_entries,
     )
@@ -199,7 +203,7 @@ def _step_confirm_and_journalize(year_month: str, company_id: int, auto_confirm:
             })
 
     # 生成收入分錄
-    income_rows = sm.get_income_summary(year_month)
+    income_rows = sm.get_income_summary(year_month, company_id=company_id)
     income_entry_count = 0
     for inc in income_rows:
         if inc.get("id"):
@@ -219,12 +223,18 @@ def _step_confirm_and_journalize(year_month: str, company_id: int, auto_confirm:
     }
 
 
-def _step_monthly_report(year_month: str, out_dir: str) -> dict:
-    """Step 2: 月報表"""
+def _step_monthly_report(year_month: str, out_dir: str,
+                         company_id: int = None) -> dict:
+    """Step 2: 月報表
+
+    Args:
+        company_id: 指定公司 (None = 全公司合併)
+    """
     from services.report_service import generate_monthly_report
 
     try:
-        filepath = generate_monthly_report(year_month, output_dir=out_dir)
+        filepath = generate_monthly_report(year_month, output_dir=out_dir,
+                                           company_id=company_id)
         if filepath:
             return {"step": "monthly_report", "status": "success", "file": filepath}
         return {"step": "monthly_report", "status": "no_data"}
@@ -233,12 +243,18 @@ def _step_monthly_report(year_month: str, out_dir: str) -> dict:
         return {"step": "monthly_report", "status": "error", "error": str(e)}
 
 
-def _step_purchase_report(year_month: str, out_dir: str) -> dict:
-    """Step 3: 採購報告"""
+def _step_purchase_report(year_month: str, out_dir: str,
+                          company_id: int = None) -> dict:
+    """Step 3: 採購報告
+
+    Args:
+        company_id: 指定公司 (None = 全公司合併)
+    """
     from services.report_service import generate_purchase_report
 
     try:
-        filepath = generate_purchase_report(year_month, output_dir=out_dir)
+        filepath = generate_purchase_report(year_month, output_dir=out_dir,
+                                            company_id=company_id)
         if filepath:
             return {"step": "purchase_report", "status": "success", "file": filepath}
         return {"step": "purchase_report", "status": "no_data"}
@@ -247,22 +263,91 @@ def _step_purchase_report(year_month: str, out_dir: str) -> dict:
         return {"step": "purchase_report", "status": "error", "error": str(e)}
 
 
-def _step_accounting_excel(year_month: str) -> dict:
-    """Step 4: 會計帳冊（8-sheet）"""
+def _step_accounting_excel(year_month: str, company_id: int = None) -> dict:
+    """Step 4: 會計帳冊（雙版本 Fail-Fast）
+
+    依序產出：
+      1. boss  → 小魚決策帳冊（8 sheets）
+      2. staff → 員工驗章帳冊（4 sheets）
+
+    任一版本失敗 → 嘗試刪除已產出檔（rollback）→ status=error，files=[]
+    這是會計 Atomicity 紅線（Codex + Gemini C4 三模型辯論一致決議）。
+
+    Args:
+        company_id: 指定公司 (None = 全公司合併)
+
+    Returns:
+        success: {"step", "status": "success", "files": [boss, staff],
+                  "boss_file", "staff_file"}
+        no_data: {"step", "status": "no_data", "files": []}
+        error:   {"step", "status": "error", "error", "failed_variant",
+                  "rolled_back": [path...], "files": []}
+    """
     from services.accounting_service import generate_accounting_excel
 
+    boss_path = None
+    staff_path = None
+    failed_variant = None
+    error_msg = None
+
     try:
-        filepath = generate_accounting_excel(year_month)
-        if filepath:
-            return {"step": "accounting_excel", "status": "success", "file": filepath}
-        return {"step": "accounting_excel", "status": "no_data"}
+        boss_path = generate_accounting_excel(
+            year_month, company_id=company_id, variant="boss")
     except Exception as e:
-        logger.error(f"Accounting excel error: {e}")
-        return {"step": "accounting_excel", "status": "error", "error": str(e)}
+        failed_variant = "boss"
+        error_msg = str(e)
+        logger.error(f"Accounting excel (boss) error: {e}")
+
+    if failed_variant is None:
+        try:
+            staff_path = generate_accounting_excel(
+                year_month, company_id=company_id, variant="staff")
+        except Exception as e:
+            failed_variant = "staff"
+            error_msg = str(e)
+            logger.error(f"Accounting excel (staff) error: {e}")
+
+    if failed_variant is not None:
+        rolled_back = []
+        for p in (boss_path, staff_path):
+            if p and os.path.exists(p):
+                try:
+                    os.unlink(p)
+                    rolled_back.append(p)
+                    logger.warning(
+                        f"Accounting excel rollback: removed {p} "
+                        f"(failed_variant={failed_variant})")
+                except OSError as ue:
+                    logger.error(f"Rollback unlink failed for {p}: {ue}")
+        return {
+            "step": "accounting_excel",
+            "status": "error",
+            "error": error_msg,
+            "failed_variant": failed_variant,
+            "rolled_back": rolled_back,
+            "files": [],
+        }
+
+    produced = [p for p in (boss_path, staff_path) if p]
+    if not produced:
+        return {"step": "accounting_excel", "status": "no_data", "files": []}
+
+    return {
+        "step": "accounting_excel",
+        "status": "success",
+        "files": produced,
+        "boss_file": boss_path,
+        "staff_file": staff_path,
+    }
 
 
-def _step_financial_reports(year_month: str, out_dir: str) -> dict:
-    """Step 5: 四大財務報表"""
+def _step_financial_reports(year_month: str, out_dir: str,
+                            company_id: int = None) -> dict:
+    """Step 5: 四大財務報表
+
+    Args:
+        company_id: 指定公司 (None = 全公司合併)
+    """
     from services.financial_report_service import (
         generate_balance_sheet,
         generate_income_statement,
@@ -280,7 +365,7 @@ def _step_financial_reports(year_month: str, out_dir: str) -> dict:
         ("權益變動表", generate_equity_changes),
     ]:
         try:
-            filepath = func(year_month, output_dir=out_dir)
+            filepath = func(year_month, output_dir=out_dir, company_id=company_id)
             if filepath:
                 generated.append(filepath)
             else:
@@ -298,12 +383,16 @@ def _step_financial_reports(year_month: str, out_dir: str) -> dict:
     }
 
 
-def _step_period_closing(year_month: str) -> dict:
-    """Step 6: 期末結帳"""
+def _step_period_closing(year_month: str, company_id: int = None) -> dict:
+    """Step 6: 期末結帳
+
+    Args:
+        company_id: 指定公司 (None = 全公司合併)
+    """
     from services.accounting_service import perform_period_end_closing
 
     try:
-        result = perform_period_end_closing(year_month)
+        result = perform_period_end_closing(year_month, company_id=company_id)
         return {
             "step": "period_closing",
             "status": "success",
@@ -314,9 +403,15 @@ def _step_period_closing(year_month: str) -> dict:
         return {"step": "period_closing", "status": "error", "error": str(e)}
 
 
-def _step_tax_export(year_month: str, out_dir: str) -> dict:
-    """Step 7: 稅務匯出"""
-    from services.tax_export_service import export_mof_txt, export_accounting_excel
+def _step_tax_export(year_month: str, out_dir: str, company_id: int = None) -> dict:
+    """Step 7: 稅務匯出（multi-tenant：需指定 company_id）
+
+    Args:
+        company_id: 指定公司 (None = 全公司合併)
+    """
+    from services.tax_export_service import (
+        export_mof_txt, export_winton_excel, export_handler_cert
+    )
 
     generated = []
     errors = []
@@ -329,36 +424,50 @@ def _step_tax_export(year_month: str, out_dir: str) -> dict:
     else:
         tax_period = f"{parts[0]}-{m:02d}-{m+1:02d}"
 
-    # MOF TXT
-    try:
-        filepath = export_mof_txt(tax_period, output_dir=out_dir)
-        generated.append(filepath)
-    except Exception as e:
-        errors.append(f"MOF TXT: {e}")
+    # 取要跑的公司清單；company_id=None → 所有 active companies 各跑一次
+    if company_id:
+        target_ids = [company_id]
+    else:
+        target_ids = [c["id"] for c in sm.get_all_companies() if c.get("is_active", 1)]
 
-    # 會計 Excel
-    try:
-        filepath = export_accounting_excel(tax_period, output_dir=out_dir)
-        generated.append(filepath)
-    except Exception as e:
-        errors.append(f"會計 Excel: {e}")
+    for cid in target_ids:
+        co = sm.get_company(cid)
+        if not co or not (co.get("tax_id") or "").strip():
+            errors.append(f"company_id={cid}: 缺統編，跳過")
+            continue
+        for fn, label in [
+            (export_mof_txt, "MOF TXT"),
+            (export_winton_excel, "WINTON"),
+            (export_handler_cert, "HANDLER_CERT"),
+        ]:
+            try:
+                filepath = fn(tax_period, out_dir, company_id=cid)
+                generated.append(filepath)
+            except Exception as e:
+                errors.append(f"C{cid} {label}: {e}")
 
     return {
         "step": "tax_export",
-        "status": "success" if generated else "error",
+        "status": "success" if generated else ("partial" if errors else "no_data"),
         "files": generated,
         "errors": errors,
         "tax_period": tax_period,
+        "companies": target_ids,
     }
 
 
-def _step_audit(year_month: str, out_dir: str) -> dict:
-    """Step 8: 自動稽核"""
+def _step_audit(year_month: str, out_dir: str, company_id: int = None) -> dict:
+    """Step 8: 自動稽核
+
+    Args:
+        company_id: 指定公司 (None = 全公司合併)
+    """
     from services.audit_service import run_full_audit, generate_audit_excel
 
     try:
-        audit = run_full_audit(year_month)
-        filepath = generate_audit_excel(year_month, output_dir=out_dir)
+        audit = run_full_audit(year_month, company_id=company_id)
+        filepath = generate_audit_excel(year_month, output_dir=out_dir,
+                                        company_id=company_id)
 
         return {
             "step": "audit",
@@ -374,7 +483,11 @@ def _step_audit(year_month: str, out_dir: str) -> dict:
 
 def _step_financial_analysis(year_month: str, out_dir: str,
                              company_id: int = None) -> dict:
-    """Step 9: 月度財務分析報告"""
+    """Step 9: 月度財務分析報告
+
+    Args:
+        company_id: 指定公司 (None = 全公司合併)
+    """
     from services.financial_analysis_service import (
         generate_monthly_analysis, generate_analysis_excel,
     )
@@ -402,6 +515,7 @@ def _step_gdrive_archive(year_month: str, files: list, gdrive_base: str,
     import shutil
 
     parts = year_month.split("-")
+    year_str = parts[0]
     month_str = f"{int(parts[1]):02d}月"
 
     # 取得要歸檔的公司列表
@@ -417,7 +531,7 @@ def _step_gdrive_archive(year_month: str, files: list, gdrive_base: str,
         if not company:
             continue
         short_name = company.get("short_name") or company.get("name") or f"company_{company['id']}"
-        company_dir = os.path.join(gdrive_base, short_name, "2026", month_str)
+        company_dir = os.path.join(gdrive_base, short_name, year_str, month_str)
 
         # 歸檔各類報表到對應子資料夾
         file_dest_map = {

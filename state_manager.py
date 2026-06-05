@@ -1182,12 +1182,20 @@ def add_income(year_month: str, amount: float, description: str = "",
     return income_id
 
 
-def get_income_summary(year_month: str) -> list[dict]:
+def get_income_summary(year_month: str, company_id: int = None) -> list[dict]:
+    """取得收入摘要
+
+    Args:
+        company_id: 指定公司 (None = 全公司合併)
+    """
     conn = _get_conn()
-    rows = conn.execute(
-        "SELECT * FROM income WHERE year_month=? ORDER BY income_date",
-        (year_month,),
-    ).fetchall()
+    sql = "SELECT * FROM income WHERE year_month=?"
+    params = [year_month]
+    if company_id:
+        sql += " AND company_id=?"
+        params.append(company_id)
+    sql += " ORDER BY income_date"
+    rows = conn.execute(sql, params).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
@@ -1501,37 +1509,67 @@ def list_payroll(year_month: str) -> list[dict]:
 def add_journal_entry(entry_date: str, year_month: str, source_type: str,
                       source_id: int, description: str,
                       account_code: str, account_name: str,
-                      debit: float = 0, credit: float = 0) -> int:
-    """新增一筆分錄"""
+                      debit: float = 0, credit: float = 0,
+                      company_id: int = None) -> int:
+    """新增一筆分錄
+
+    Args:
+        company_id: 指定公司 (None = 全公司合併)
+    """
     conn = _get_conn()
-    cur = conn.execute(
-        "INSERT INTO journal_entries "
-        "(entry_date, year_month, source_type, source_id, description, "
-        "account_code, account_name, debit, credit) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (entry_date, year_month, source_type, source_id,
-         description, account_code, account_name, debit, credit),
-    )
+    if company_id is None and source_id:
+        if source_type == "purchase":
+            row = conn.execute(
+                "SELECT company_id FROM purchase_staging WHERE id=?", (source_id,)
+            ).fetchone()
+            company_id = row["company_id"] if row else None
+        elif source_type == "income":
+            row = conn.execute(
+                "SELECT company_id FROM income WHERE id=?", (source_id,)
+            ).fetchone()
+            company_id = row["company_id"] if row else None
+    if company_id:
+        cur = conn.execute(
+            "INSERT INTO journal_entries "
+            "(entry_date, year_month, source_type, source_id, description, "
+            "account_code, account_name, debit, credit, company_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (entry_date, year_month, source_type, source_id,
+             description, account_code, account_name, debit, credit, company_id),
+        )
+    else:
+        cur = conn.execute(
+            "INSERT INTO journal_entries "
+            "(entry_date, year_month, source_type, source_id, description, "
+            "account_code, account_name, debit, credit) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (entry_date, year_month, source_type, source_id,
+             description, account_code, account_name, debit, credit),
+        )
     conn.commit()
     entry_id = cur.lastrowid
     conn.close()
     return entry_id
 
 
-def get_journal_entries(year_month: str, source_type: str = None) -> list[dict]:
-    """取得指定月份的分錄"""
+def get_journal_entries(year_month: str, source_type: str = None,
+                        company_id: int = None) -> list[dict]:
+    """取得指定月份的分錄
+
+    Args:
+        company_id: 指定公司 (None = 全公司合併)
+    """
     conn = _get_conn()
+    sql = "SELECT * FROM journal_entries WHERE year_month=?"
+    params = [year_month]
     if source_type:
-        rows = conn.execute(
-            "SELECT * FROM journal_entries WHERE year_month=? AND source_type=? "
-            "ORDER BY entry_date, id",
-            (year_month, source_type),
-        ).fetchall()
-    else:
-        rows = conn.execute(
-            "SELECT * FROM journal_entries WHERE year_month=? ORDER BY entry_date, id",
-            (year_month,),
-        ).fetchall()
+        sql += " AND source_type=?"
+        params.append(source_type)
+    if company_id:
+        sql += " AND company_id=?"
+        params.append(company_id)
+    sql += " ORDER BY entry_date, id"
+    rows = conn.execute(sql, params).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
@@ -1547,42 +1585,64 @@ def get_journal_entries_by_source(source_type: str, source_id: int) -> list[dict
     return [dict(r) for r in rows]
 
 
-def delete_journal_entries_by_source(source_type: str, source_id: int):
-    """刪除特定來源的分錄（重新生成前清除用）"""
+def delete_journal_entries_by_source(source_type: str, source_id: int,
+                                     company_id: int = None):
+    """刪除特定來源的分錄（重新生成前清除用）
+
+    Args:
+        company_id: 指定公司 (None = 全公司合併)
+    """
     conn = _get_conn()
-    conn.execute(
-        "DELETE FROM journal_entries WHERE source_type=? AND source_id=?",
-        (source_type, source_id),
-    )
+    sql = "DELETE FROM journal_entries WHERE source_type=? AND source_id=?"
+    params = [source_type, source_id]
+    if company_id:
+        sql += " AND company_id=?"
+        params.append(company_id)
+    conn.execute(sql, params)
     conn.commit()
     conn.close()
 
 
-def get_trial_balance(year_month: str) -> list[dict]:
-    """取得試算表（各科目借貸合計）"""
+def get_trial_balance(year_month: str, company_id: int = None) -> list[dict]:
+    """取得試算表（各科目借貸合計）
+
+    Args:
+        company_id: 指定公司 (None = 全公司合併)
+    """
     conn = _get_conn()
-    rows = conn.execute(
+    sql = (
         "SELECT account_code, account_name, "
         "SUM(debit) as total_debit, SUM(credit) as total_credit, "
         "SUM(debit) - SUM(credit) as balance "
-        "FROM journal_entries WHERE year_month=? "
-        "GROUP BY account_code, account_name "
-        "ORDER BY account_code",
-        (year_month,),
-    ).fetchall()
+        "FROM journal_entries WHERE year_month=?"
+    )
+    params = [year_month]
+    if company_id:
+        sql += " AND company_id=?"
+        params.append(company_id)
+    sql += " GROUP BY account_code, account_name ORDER BY account_code"
+    rows = conn.execute(sql, params).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
 
-def get_journal_summary(year_month: str) -> dict:
-    """取得月度分錄摘要"""
+def get_journal_summary(year_month: str, company_id: int = None) -> dict:
+    """取得月度分錄摘要
+
+    Args:
+        company_id: 指定公司 (None = 全公司合併)
+    """
     conn = _get_conn()
-    row = conn.execute(
+    sql = (
         "SELECT COUNT(*) as count, "
         "SUM(debit) as total_debit, SUM(credit) as total_credit "
-        "FROM journal_entries WHERE year_month=?",
-        (year_month,),
-    ).fetchone()
+        "FROM journal_entries WHERE year_month=?"
+    )
+    params = [year_month]
+    if company_id:
+        sql += " AND company_id=?"
+        params.append(company_id)
+    row = conn.execute(sql, params).fetchone()
     conn.close()
     if row:
         return {

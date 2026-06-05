@@ -10,9 +10,14 @@ import state_manager as sm
 logger = logging.getLogger("shanbot.report")
 
 
-def generate_purchase_report(year_month: str, output_dir: str = None) -> Optional[str]:
-    """生成採購報告 Excel（成本 + 比價 + 建議）"""
-    stagings = sm.get_stagings_by_month(year_month)
+def generate_purchase_report(year_month: str, output_dir: str = None,
+                             company_id: int = None) -> Optional[str]:
+    """生成採購報告 Excel（成本 + 比價 + 建議）
+
+    Args:
+        company_id: 指定公司 (None = 全公司合併)
+    """
+    stagings = sm.get_stagings_by_month(year_month, company_id=company_id)
     if not stagings:
         logger.warning(f"No stagings for {year_month}")
         return None
@@ -137,12 +142,16 @@ def generate_purchase_report(year_month: str, output_dir: str = None) -> Optiona
     return filepath
 
 
-def generate_monthly_report(year_month: str, output_dir: str = None) -> Optional[str]:
+def generate_monthly_report(year_month: str, output_dir: str = None,
+                            company_id: int = None) -> Optional[str]:
     """生成月報表 Excel（暫存統整 + 分類匯總 + 憑證目錄）
+
+    Args:
+        company_id: 指定公司 (None = 全公司合併)
 
     使用 save_with_shadow：保留使用者在 Excel 上手改的欄位、註記、狀態調整。
     """
-    stagings = sm.get_stagings_by_month(year_month)
+    stagings = sm.get_stagings_by_month(year_month, company_id=company_id)
     if not stagings:
         return None
 
@@ -211,8 +220,13 @@ def generate_monthly_report(year_month: str, output_dir: str = None) -> Optional
     return filepath
 
 
-def generate_annual_report(year: str, output_dir: str = None) -> Optional[str]:
-    """生成年度報表 Excel（12 個月彙總）"""
+def generate_annual_report(year: str, output_dir: str = None,
+                           company_id: int = None) -> Optional[str]:
+    """生成年度報表 Excel（12 個月彙總）
+
+    Args:
+        company_id: 指定公司 (None = 全公司合併)
+    """
     if not output_dir:
         output_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)),
                                    "data", "reports")
@@ -250,7 +264,7 @@ def generate_annual_report(year: str, output_dir: str = None) -> Optional[str]:
 
     for m in range(1, 13):
         ym = f"{year}-{m:02d}"
-        stats = sm.get_staging_stats(ym)
+        stats = sm.get_staging_stats(ym, company_id=company_id)
         total_count = stats.get("total", 0) or 0
         if total_count == 0:
             continue
@@ -294,7 +308,7 @@ def generate_annual_report(year: str, output_dir: str = None) -> Optional[str]:
     cat_totals = {}
     for m in range(1, 13):
         ym = f"{year}-{m:02d}"
-        stagings = sm.get_stagings_by_month(ym)
+        stagings = sm.get_stagings_by_month(ym, company_id=company_id)
         for s in stagings:
             items = sm.get_purchase_items(s["id"])
             for item in items:

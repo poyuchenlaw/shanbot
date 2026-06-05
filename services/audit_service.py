@@ -23,8 +23,11 @@ logger = logging.getLogger("shanbot.audit")
 # 1. 試算表借貸平衡驗證
 # =====================================================================
 
-def verify_trial_balance(year_month: str) -> dict:
+def verify_trial_balance(year_month: str, company_id: int = None) -> dict:
     """驗證月度試算表借貸是否平衡
+
+    Args:
+        company_id: 指定公司 (None = 全公司合併)
 
     Returns:
         {
@@ -37,7 +40,7 @@ def verify_trial_balance(year_month: str) -> dict:
             "details": list  # 各科目明細
         }
     """
-    trial = sm.get_trial_balance(year_month)
+    trial = sm.get_trial_balance(year_month, company_id=company_id)
     total_debit = sum(t.get("total_debit", 0) or 0 for t in trial)
     total_credit = sum(t.get("total_credit", 0) or 0 for t in trial)
     diff = abs(total_debit - total_credit)
@@ -57,14 +60,17 @@ def verify_trial_balance(year_month: str) -> dict:
 # 2. 資產負債表恆等式驗證
 # =====================================================================
 
-def verify_balance_sheet_equation(year_month: str) -> dict:
+def verify_balance_sheet_equation(year_month: str, company_id: int = None) -> dict:
     """驗證 資產 = 負債 + 權益
+
+    Args:
+        company_id: 指定公司 (None = 全公司合併)
 
     結帳前：資產 = 負債 + 權益 + (收入 - 成本 - 費用)
     結帳後：資產 = 負債 + 權益（淨利已結轉到 3300）
     """
     from services.accounting_service import generate_balance_sheet
-    bs = generate_balance_sheet(year_month)
+    bs = generate_balance_sheet(year_month, company_id=company_id)
 
     assets = bs.get("assets", 0)
     liabilities = bs.get("liabilities", 0)
@@ -76,7 +82,7 @@ def verify_balance_sheet_equation(year_month: str) -> dict:
 
     if not is_closed:
         # 結帳前：計算未結轉的損益（4xxx - 5xxx - 6xxx）
-        trial = sm.get_trial_balance(year_month)
+        trial = sm.get_trial_balance(year_month, company_id=company_id)
         revenue = sum(abs(t.get("balance", 0)) for t in trial if t.get("account_code", "").startswith("4"))
         cost = sum(t.get("balance", 0) for t in trial if t.get("account_code", "").startswith("5"))
         expense = sum(t.get("balance", 0) for t in trial if t.get("account_code", "").startswith("6"))
@@ -110,8 +116,11 @@ def verify_balance_sheet_equation(year_month: str) -> dict:
 # 3. 進項稅額與發票覈對
 # =====================================================================
 
-def verify_input_tax(year_month: str) -> dict:
+def verify_input_tax(year_month: str, company_id: int = None) -> dict:
     """覈對進項稅額：staging 記錄 vs journal_entries
+
+    Args:
+        company_id: 指定公司 (None = 全公司合併)
 
     Returns:
         {
@@ -124,7 +133,7 @@ def verify_input_tax(year_month: str) -> dict:
             "non_deductible_count": int,   # 不可扣抵筆數
         }
     """
-    stagings = sm.get_stagings_by_month(year_month)
+    stagings = sm.get_stagings_by_month(year_month, company_id=company_id)
 
     staging_tax = 0
     invoice_count = 0
@@ -149,7 +158,7 @@ def verify_input_tax(year_month: str) -> dict:
             non_deductible_count += 1
 
     # journal_entries 中 1150 進項稅額的借方合計
-    journal_entries = sm.get_journal_entries(year_month)
+    journal_entries = sm.get_journal_entries(year_month, company_id=company_id)
     journal_tax = sum(
         e.get("debit", 0) for e in journal_entries
         if e.get("account_code") == "1150"
@@ -172,8 +181,11 @@ def verify_input_tax(year_month: str) -> dict:
 # 4. 異常偵測
 # =====================================================================
 
-def detect_anomalies(year_month: str) -> dict:
+def detect_anomalies(year_month: str, company_id: int = None) -> dict:
     """偵測異常交易
+
+    Args:
+        company_id: 指定公司 (None = 全公司合併)
 
     檢查項目：
     - 單筆金額超過門檻（預設 50,000）
@@ -190,7 +202,7 @@ def detect_anomalies(year_month: str) -> dict:
             "total_alerts": int,
         }
     """
-    stagings = sm.get_stagings_by_month(year_month)
+    stagings = sm.get_stagings_by_month(year_month, company_id=company_id)
     confirmed = [s for s in stagings if s.get("status") in ("confirmed", "exported")]
 
     alerts = {
@@ -273,8 +285,11 @@ def detect_anomalies(year_month: str) -> dict:
 # 5. 每筆交易借貸平衡批次驗證
 # =====================================================================
 
-def verify_all_journal_balances(year_month: str) -> dict:
+def verify_all_journal_balances(year_month: str, company_id: int = None) -> dict:
     """批次驗證所有已確認交易的借貸平衡
+
+    Args:
+        company_id: 指定公司 (None = 全公司合併)
 
     Returns:
         {
@@ -283,7 +298,7 @@ def verify_all_journal_balances(year_month: str) -> dict:
             "imbalanced": list  # 不平衡的交易
         }
     """
-    stagings = sm.get_stagings_by_month(year_month)
+    stagings = sm.get_stagings_by_month(year_month, company_id=company_id)
     confirmed = [s for s in stagings if s.get("status") in ("confirmed", "exported")]
 
     imbalanced = []
@@ -322,18 +337,21 @@ def verify_all_journal_balances(year_month: str) -> dict:
 # 6. 損益表交叉驗證
 # =====================================================================
 
-def verify_income_statement(year_month: str) -> dict:
+def verify_income_statement(year_month: str, company_id: int = None) -> dict:
     """交叉驗證損益表數據
+
+    Args:
+        company_id: 指定公司 (None = 全公司合併)
 
     比對：
     - staging 金額合計 vs journal_entries 進貨科目合計
     - income 表 vs journal_entries 收入科目合計
     """
     from services.accounting_service import generate_income_statement
-    pl = generate_income_statement(year_month)
+    pl = generate_income_statement(year_month, company_id=company_id)
 
     # staging 進貨合計
-    stagings = sm.get_stagings_by_month(year_month)
+    stagings = sm.get_stagings_by_month(year_month, company_id=company_id)
     confirmed = [s for s in stagings if s.get("status") in ("confirmed", "exported")]
     staging_subtotal = sum(s.get("subtotal", 0) or 0 for s in confirmed)
 
@@ -341,7 +359,7 @@ def verify_income_statement(year_month: str) -> dict:
     journal_cost = pl.get("cost", 0)
 
     # income 表合計
-    income_rows = sm.get_income_summary(year_month)
+    income_rows = sm.get_income_summary(year_month, company_id=company_id)
     income_table_total = sum(r.get("amount", 0) for r in income_rows)
 
     # journal 收入合計（4xxx）
@@ -382,8 +400,11 @@ def verify_income_statement(year_month: str) -> dict:
 # 7. 完整稽核報告
 # =====================================================================
 
-def run_full_audit(year_month: str) -> dict:
+def run_full_audit(year_month: str, company_id: int = None) -> dict:
     """執行完整月度稽核，回傳綜合報告
+
+    Args:
+        company_id: 指定公司 (None = 全公司合併)
 
     Returns:
         {
@@ -406,22 +427,22 @@ def run_full_audit(year_month: str) -> dict:
     checks = {}
 
     # 1. 試算表
-    checks["trial_balance"] = verify_trial_balance(year_month)
+    checks["trial_balance"] = verify_trial_balance(year_month, company_id=company_id)
 
     # 2. 資產負債表恆等式
-    checks["balance_sheet"] = verify_balance_sheet_equation(year_month)
+    checks["balance_sheet"] = verify_balance_sheet_equation(year_month, company_id=company_id)
 
     # 3. 進項稅額覈對
-    checks["input_tax"] = verify_input_tax(year_month)
+    checks["input_tax"] = verify_input_tax(year_month, company_id=company_id)
 
     # 4. 分錄借貸平衡
-    checks["journal_balances"] = verify_all_journal_balances(year_month)
+    checks["journal_balances"] = verify_all_journal_balances(year_month, company_id=company_id)
 
     # 5. 損益表交叉驗證
-    checks["income_statement"] = verify_income_statement(year_month)
+    checks["income_statement"] = verify_income_statement(year_month, company_id=company_id)
 
     # 6. 異常偵測
-    checks["anomalies"] = detect_anomalies(year_month)
+    checks["anomalies"] = detect_anomalies(year_month, company_id=company_id)
 
     # 綜合判定
     pass_checks = [
@@ -486,8 +507,13 @@ def run_full_audit(year_month: str) -> dict:
     }
 
 
-def generate_audit_excel(year_month: str, output_dir: str = None) -> Optional[str]:
-    """生成稽核報告 Excel"""
+def generate_audit_excel(year_month: str, output_dir: str = None,
+                         company_id: int = None) -> Optional[str]:
+    """生成稽核報告 Excel
+
+    Args:
+        company_id: 指定公司 (None = 全公司合併)
+    """
     try:
         import openpyxl
         from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
@@ -495,7 +521,7 @@ def generate_audit_excel(year_month: str, output_dir: str = None) -> Optional[st
         logger.error("openpyxl not installed")
         return None
 
-    audit = run_full_audit(year_month)
+    audit = run_full_audit(year_month, company_id=company_id)
 
     if not output_dir:
         output_dir = os.path.join(

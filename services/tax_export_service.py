@@ -35,10 +35,27 @@ import state_manager as sm
 
 logger = logging.getLogger("shanbot.tax_export")
 
-# === 環境變數 ===
+# === 環境變數（fallback：未指定 company_id 時使用）===
 COMPANY_TAX_ID = os.environ.get("COMPANY_TAX_ID", "")
 COMPANY_TAX_REG_NO = os.environ.get("COMPANY_TAX_REG_NO", "")
 COMPANY_NAME = os.environ.get("COMPANY_NAME", "")
+
+
+def _resolve_company_info(company_id: Optional[int]) -> tuple[str, str, str]:
+    """從 companies 表撈統編 / 稅籍 / 名稱；company_id 為 None 則 fallback env。
+
+    Returns: (tax_id, tax_reg_no, full_name)
+    """
+    if company_id:
+        co = sm.get_company(company_id)
+        if not co:
+            raise ValueError(f"company_id={company_id} 不存在於 companies 表")
+        tax_id = (co.get("tax_id") or "").strip()
+        tax_reg_no = (co.get("tax_reg_no") or "").strip() or tax_id  # 退回統編
+        name = co.get("full_name") or co.get("short_name") or ""
+        return tax_id, tax_reg_no, name
+    # fallback env
+    return COMPANY_TAX_ID, COMPANY_TAX_REG_NO, COMPANY_NAME
 
 # === 中文字型路徑（reportlab PDF 用）===
 _CJK_FONT_PATHS = [
@@ -79,7 +96,7 @@ def _register_cjk_font() -> str:
 # 1. MOF 進項 TXT 匯出（81-byte 固定寬度）
 # =====================================================================
 
-def export_mof_txt(tax_period: str, output_dir: str) -> str:
+def export_mof_txt(tax_period: str, output_dir: str, company_id: int = None) -> str:
     """匯出財政部媒體申報用進項 TXT 檔。
 
     每行恰好 81 bytes（ASCII），符合財政部規定格式。
@@ -87,23 +104,28 @@ def export_mof_txt(tax_period: str, output_dir: str) -> str:
     Args:
         tax_period: 稅期，如 "2026-01-02"
         output_dir: 輸出目錄路徑
+        company_id: 指定公司（None = 用環境變數，向後相容單租戶）
 
     Returns:
         產出檔案的完整路徑
 
     Raises:
-        ValueError: 環境變數未設定或無資料可匯出
+        ValueError: 公司資訊缺失或無資料可匯出
     """
-    # 驗證必要環境變數
-    tax_id = COMPANY_TAX_ID
-    tax_reg_no = COMPANY_TAX_REG_NO
+    tax_id, tax_reg_no, _name = _resolve_company_info(company_id)
     if not tax_id:
-        raise ValueError("環境變數 COMPANY_TAX_ID 未設定")
+        raise ValueError(
+            f"company_id={company_id} 缺統編 (tax_id)" if company_id
+            else "環境變數 COMPANY_TAX_ID 未設定（且未提供 company_id）"
+        )
     if not tax_reg_no:
-        raise ValueError("環境變數 COMPANY_TAX_REG_NO 未設定")
+        raise ValueError(
+            f"company_id={company_id} 缺稅籍編號 (tax_reg_no)" if company_id
+            else "環境變數 COMPANY_TAX_REG_NO 未設定"
+        )
 
     # 取得已確認的進項記錄
-    stagings = sm.get_confirmed_stagings(tax_period)
+    stagings = sm.get_confirmed_stagings(tax_period, company_id=company_id)
     if not stagings:
         raise ValueError(f"稅期 {tax_period} 無已確認之進項記錄")
 
@@ -144,7 +166,8 @@ def export_mof_txt(tax_period: str, output_dir: str) -> str:
         total_tax += int(staging.get("tax_amount", 0))
 
     # 寫入檔案（ASCII 編碼，CRLF 換行符合 DOS 格式）
-    filename = f"MOF_PURCHASE_{tax_period}.txt"
+    suffix = f"_C{company_id}" if company_id else ""
+    filename = f"MOF_PURCHASE_{tax_period}{suffix}.txt"
     filepath = os.path.join(output_dir, filename)
     with open(filepath, "w", encoding="ascii", newline="") as f:
         for line in lines:
@@ -267,7 +290,7 @@ def _format_mof_line(
 # 2. 文中資訊 Excel 匯出
 # =====================================================================
 
-def export_winton_excel(tax_period: str, output_dir: str) -> str:
+def export_winton_excel(tax_period: str, output_dir: str, company_id: int = None) -> str:
     """匯出文中資訊會計系統用 Excel 檔。
 
     欄位 A-K：日期、傳票號碼、摘要、借方科目、借方金額、
@@ -276,11 +299,12 @@ def export_winton_excel(tax_period: str, output_dir: str) -> str:
     Args:
         tax_period: 稅期，如 "2026-01-02"
         output_dir: 輸出目錄路徑
+        company_id: 指定公司（None = 全公司合併）
 
     Returns:
         產出檔案的完整路徑
     """
-    stagings = sm.get_confirmed_stagings(tax_period)
+    stagings = sm.get_confirmed_stagings(tax_period, company_id=company_id)
     if not stagings:
         raise ValueError(f"稅期 {tax_period} 無已確認之進項記錄")
 
@@ -382,7 +406,8 @@ def export_winton_excel(tax_period: str, output_dir: str) -> str:
             cell.number_format = "#,##0"
             cell.alignment = Alignment(horizontal="right")
 
-    filename = f"WINTON_{tax_period}.xlsx"
+    suffix = f"_C{company_id}" if company_id else ""
+    filename = f"WINTON_{tax_period}{suffix}.xlsx"
     filepath = os.path.join(output_dir, filename)
     from services.excel_merge import save_with_shadow
     save_with_shadow(wb, filepath)
@@ -435,7 +460,7 @@ def _get_primary_account_code(staging_id: int) -> str:
 # 3. 經手人證明表 PDF
 # =====================================================================
 
-def export_handler_cert(tax_period: str, output_dir: str) -> str:
+def export_handler_cert(tax_period: str, output_dir: str, company_id: int = None) -> str:
     """匯出經手人證明表 PDF（免用發票之市場採購）。
 
     每日一頁，包含品名、數量、單位、單價、金額明細表。
@@ -443,6 +468,7 @@ def export_handler_cert(tax_period: str, output_dir: str) -> str:
     Args:
         tax_period: 稅期，如 "2026-01-02"
         output_dir: 輸出目錄路徑
+        company_id: 指定公司（None = 全公司合併）
 
     Returns:
         產出檔案的完整路徑
@@ -450,7 +476,7 @@ def export_handler_cert(tax_period: str, output_dir: str) -> str:
     Raises:
         ValueError: 無符合條件的市場採購記錄
     """
-    stagings = sm.get_confirmed_stagings(tax_period)
+    stagings = sm.get_confirmed_stagings(tax_period, company_id=company_id)
 
     # 篩選免用發票的市場採購
     market_stagings = [
@@ -472,10 +498,12 @@ def export_handler_cert(tax_period: str, output_dir: str) -> str:
     # 註冊中文字型
     font_name = _register_cjk_font()
 
-    filename = f"HANDLER_CERT_{tax_period}.pdf"
+    suffix = f"_C{company_id}" if company_id else ""
+    filename = f"HANDLER_CERT_{tax_period}{suffix}.pdf"
     filepath = os.path.join(output_dir, filename)
 
-    company_name = COMPANY_NAME or "（公司名稱未設定）"
+    _t, _r, resolved_name = _resolve_company_info(company_id)
+    company_name = resolved_name or "（公司名稱未設定）"
 
     doc = SimpleDocTemplate(
         filepath,
@@ -695,7 +723,7 @@ def _format_number(value) -> str:
 # 4. 匯出前驗證（7 點檢核）
 # =====================================================================
 
-def validate_before_export(tax_period: str) -> tuple[bool, list[str]]:
+def validate_before_export(tax_period: str, company_id: int = None) -> tuple[bool, list[str]]:
     """匯出前 7 點驗證檢核。
 
     檢核項目：
@@ -717,10 +745,10 @@ def validate_before_export(tax_period: str) -> tuple[bool, list[str]]:
     errors: list[str] = []
 
     # 取得該稅期所有暫存記錄（含 pending 與 confirmed）
-    confirmed = sm.get_confirmed_stagings(tax_period)
+    confirmed = sm.get_confirmed_stagings(tax_period, company_id=company_id)
 
     # --- 檢核 1: 所有記錄皆已確認 ---
-    pending = _get_pending_for_period(tax_period)
+    pending = _get_pending_for_period(tax_period, company_id=company_id)
     if pending:
         errors.append(
             f"[1] 有 {len(pending)} 筆未確認記錄（staging_id: "
@@ -854,7 +882,7 @@ def validate_before_export(tax_period: str) -> tuple[bool, list[str]]:
     return (is_valid, errors)
 
 
-def _get_pending_for_period(tax_period: str) -> list[dict]:
+def _get_pending_for_period(tax_period: str, company_id: int = None) -> list[dict]:
     """取得該稅期的 pending 記錄。
 
     因為 state_manager 的 get_pending_stagings 是依 chat_id 篩選，
@@ -862,10 +890,12 @@ def _get_pending_for_period(tax_period: str) -> list[dict]:
     """
     from state_manager import _get_conn
     conn = _get_conn()
-    rows = conn.execute(
-        "SELECT * FROM purchase_staging WHERE status='pending' AND tax_period=?",
-        (tax_period,),
-    ).fetchall()
+    sql = "SELECT * FROM purchase_staging WHERE status='pending' AND tax_period=?"
+    params = [tax_period]
+    if company_id:
+        sql += " AND company_id=?"
+        params.append(company_id)
+    rows = conn.execute(sql, params).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 

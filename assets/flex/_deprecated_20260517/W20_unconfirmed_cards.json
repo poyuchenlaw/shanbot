@@ -1,0 +1,4646 @@
+{
+  "type": "carousel",
+  "contents": [
+    {
+      "type": "bubble",
+      "size": "kilo",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#FFF3CD",
+        "contents": [
+          {
+            "type": "text",
+            "text": "這筆款項認不出來",
+            "weight": "bold",
+            "size": "md",
+            "color": "#333333"
+          },
+          {
+            "type": "text",
+            "text": "公司：福利社　待確認",
+            "size": "xs",
+            "color": "#666666"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "OCR 辨識到「圻逸食品有限公司」",
+            "size": "sm",
+            "color": "#555555",
+            "wrap": true
+          },
+          {
+            "type": "text",
+            "text": "你看是不是這幾個之一：",
+            "size": "sm",
+            "color": "#333333",
+            "margin": "md"
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "action": {
+              "type": "postback",
+              "label": "圻逸食品有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=圻逸食品有限公司&score=100.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "忻逸食品有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=忻逸食品有限公司&score=87.5"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "昕逸食品有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=昕逸食品有限公司&score=87.5"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "color": "#888888",
+            "action": {
+              "type": "postback",
+              "label": "都不是，新供應商",
+              "data": "action=supplier_new&supplier_name=圻逸食品有限公司"
+            },
+            "margin": "sm"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bubble",
+      "size": "kilo",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#FFF3CD",
+        "contents": [
+          {
+            "type": "text",
+            "text": "這筆款項認不出來",
+            "weight": "bold",
+            "size": "md",
+            "color": "#333333"
+          },
+          {
+            "type": "text",
+            "text": "公司：福利社　待確認",
+            "size": "xs",
+            "color": "#666666"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "OCR 辨識到「詠源順環保有限公司」",
+            "size": "sm",
+            "color": "#555555",
+            "wrap": true
+          },
+          {
+            "type": "text",
+            "text": "你看是不是這幾個之一：",
+            "size": "sm",
+            "color": "#333333",
+            "margin": "md"
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "action": {
+              "type": "postback",
+              "label": "詠源順環保有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=詠源順環保有限公司&score=100.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "潮崴有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=潮崴有限公司&score=53.333333333333336"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "瀚崴有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=瀚崴有限公司&score=53.333333333333336"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "color": "#888888",
+            "action": {
+              "type": "postback",
+              "label": "都不是，新供應商",
+              "data": "action=supplier_new&supplier_name=詠源順環保有限公司"
+            },
+            "margin": "sm"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bubble",
+      "size": "kilo",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#FFF3CD",
+        "contents": [
+          {
+            "type": "text",
+            "text": "這筆款項認不出來",
+            "weight": "bold",
+            "size": "md",
+            "color": "#333333"
+          },
+          {
+            "type": "text",
+            "text": "公司：福利社　筆數：3筆　金額：107,137元",
+            "size": "xs",
+            "color": "#666666"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "OCR 辨識到「黃子儀蔬菜物流」",
+            "size": "sm",
+            "color": "#555555",
+            "wrap": true
+          },
+          {
+            "type": "text",
+            "text": "你看是不是這幾個之一：",
+            "size": "sm",
+            "color": "#333333",
+            "margin": "md"
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "action": {
+              "type": "postback",
+              "label": "黃子儀蔬菜物流",
+              "data": "action=supplier_confirm&row_id=0&choice=黃子儀蔬菜物流&score=100.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "興丁蔬菜物流",
+              "data": "action=supplier_confirm&row_id=0&choice=興丁蔬菜物流&score=61.53846153846154"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "雙子星食品",
+              "data": "action=supplier_confirm&row_id=0&choice=雙子星食品&score=16.666666666666664"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "color": "#888888",
+            "action": {
+              "type": "postback",
+              "label": "都不是，新供應商",
+              "data": "action=supplier_new&supplier_name=黃子儀蔬菜物流"
+            },
+            "margin": "sm"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bubble",
+      "size": "kilo",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#FFF3CD",
+        "contents": [
+          {
+            "type": "text",
+            "text": "這筆款項認不出來",
+            "weight": "bold",
+            "size": "md",
+            "color": "#333333"
+          },
+          {
+            "type": "text",
+            "text": "公司：福利社　筆數：4筆　金額：8,400元",
+            "size": "xs",
+            "color": "#666666"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "OCR 辨識到「unknown」",
+            "size": "sm",
+            "color": "#555555",
+            "wrap": true
+          },
+          {
+            "type": "text",
+            "text": "你看是不是這幾個之一：",
+            "size": "sm",
+            "color": "#333333",
+            "margin": "md"
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "action": {
+              "type": "postback",
+              "label": "null",
+              "data": "action=supplier_confirm&row_id=0&choice=null&score=18.181818181818176"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "清新蛋行",
+              "data": "action=supplier_confirm&row_id=0&choice=清新蛋行&score=0.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "大興米糧行",
+              "data": "action=supplier_confirm&row_id=0&choice=大興米糧行&score=0.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "color": "#888888",
+            "action": {
+              "type": "postback",
+              "label": "都不是，新供應商",
+              "data": "action=supplier_new&supplier_name=unknown"
+            },
+            "margin": "sm"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bubble",
+      "size": "kilo",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#FFF3CD",
+        "contents": [
+          {
+            "type": "text",
+            "text": "這筆款項認不出來",
+            "weight": "bold",
+            "size": "md",
+            "color": "#333333"
+          },
+          {
+            "type": "text",
+            "text": "公司：福利社　筆數：1筆　金額：2,300元",
+            "size": "xs",
+            "color": "#666666"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "OCR 辨識到「台達中」",
+            "size": "sm",
+            "color": "#555555",
+            "wrap": true
+          },
+          {
+            "type": "text",
+            "text": "你看是不是這幾個之一：",
+            "size": "sm",
+            "color": "#333333",
+            "margin": "md"
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "action": {
+              "type": "postback",
+              "label": "台達中",
+              "data": "action=supplier_confirm&row_id=0&choice=台達中&score=100.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "台達電",
+              "data": "action=supplier_confirm&row_id=0&choice=台達電&score=66.66666666666667"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "台達史",
+              "data": "action=supplier_confirm&row_id=0&choice=台達史&score=66.66666666666667"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "color": "#888888",
+            "action": {
+              "type": "postback",
+              "label": "都不是，新供應商",
+              "data": "action=supplier_new&supplier_name=台達中"
+            },
+            "margin": "sm"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bubble",
+      "size": "kilo",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#FFF3CD",
+        "contents": [
+          {
+            "type": "text",
+            "text": "這筆款項認不出來",
+            "weight": "bold",
+            "size": "md",
+            "color": "#333333"
+          },
+          {
+            "type": "text",
+            "text": "公司：福利社　筆數：1筆　金額：700元",
+            "size": "xs",
+            "color": "#666666"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "OCR 辨識到「台電」",
+            "size": "sm",
+            "color": "#555555",
+            "wrap": true
+          },
+          {
+            "type": "text",
+            "text": "你看是不是這幾個之一：",
+            "size": "sm",
+            "color": "#333333",
+            "margin": "md"
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "action": {
+              "type": "postback",
+              "label": "台電",
+              "data": "action=supplier_confirm&row_id=0&choice=台電&score=100.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "台達電",
+              "data": "action=supplier_confirm&row_id=0&choice=台達電&score=80.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "台吉電2廠",
+              "data": "action=supplier_confirm&row_id=0&choice=台吉電2廠&score=57.14285714285714"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "color": "#888888",
+            "action": {
+              "type": "postback",
+              "label": "都不是，新供應商",
+              "data": "action=supplier_new&supplier_name=台電"
+            },
+            "margin": "sm"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bubble",
+      "size": "kilo",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#FFF3CD",
+        "contents": [
+          {
+            "type": "text",
+            "text": "這筆款項認不出來",
+            "weight": "bold",
+            "size": "md",
+            "color": "#333333"
+          },
+          {
+            "type": "text",
+            "text": "公司：福利社　待確認",
+            "size": "xs",
+            "color": "#666666"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "OCR 辨識到「圻逸食品有限公司」",
+            "size": "sm",
+            "color": "#555555",
+            "wrap": true
+          },
+          {
+            "type": "text",
+            "text": "你看是不是這幾個之一：",
+            "size": "sm",
+            "color": "#333333",
+            "margin": "md"
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "action": {
+              "type": "postback",
+              "label": "圻逸食品有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=圻逸食品有限公司&score=100.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "忻逸食品有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=忻逸食品有限公司&score=87.5"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "昕逸食品有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=昕逸食品有限公司&score=87.5"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "color": "#888888",
+            "action": {
+              "type": "postback",
+              "label": "都不是，新供應商",
+              "data": "action=supplier_new&supplier_name=圻逸食品有限公司"
+            },
+            "margin": "sm"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bubble",
+      "size": "kilo",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#FFF3CD",
+        "contents": [
+          {
+            "type": "text",
+            "text": "這筆款項認不出來",
+            "weight": "bold",
+            "size": "md",
+            "color": "#333333"
+          },
+          {
+            "type": "text",
+            "text": "公司：福利社　筆數：1筆　金額：47,200元",
+            "size": "xs",
+            "color": "#666666"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "OCR 辨識到「大興米糧行」",
+            "size": "sm",
+            "color": "#555555",
+            "wrap": true
+          },
+          {
+            "type": "text",
+            "text": "你看是不是這幾個之一：",
+            "size": "sm",
+            "color": "#333333",
+            "margin": "md"
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "action": {
+              "type": "postback",
+              "label": "大興米糧行",
+              "data": "action=supplier_confirm&row_id=0&choice=大興米糧行&score=100.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "興農",
+              "data": "action=supplier_confirm&row_id=0&choice=興農&score=28.57142857142857"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "清新蛋行",
+              "data": "action=supplier_confirm&row_id=0&choice=清新蛋行&score=22.22222222222222"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "color": "#888888",
+            "action": {
+              "type": "postback",
+              "label": "都不是，新供應商",
+              "data": "action=supplier_new&supplier_name=大興米糧行"
+            },
+            "margin": "sm"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bubble",
+      "size": "kilo",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#FFF3CD",
+        "contents": [
+          {
+            "type": "text",
+            "text": "這筆款項認不出來",
+            "weight": "bold",
+            "size": "md",
+            "color": "#333333"
+          },
+          {
+            "type": "text",
+            "text": "公司：福利社　待確認",
+            "size": "xs",
+            "color": "#666666"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "OCR 辨識到「富欣」",
+            "size": "sm",
+            "color": "#555555",
+            "wrap": true
+          },
+          {
+            "type": "text",
+            "text": "你看是不是這幾個之一：",
+            "size": "sm",
+            "color": "#333333",
+            "margin": "md"
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "action": {
+              "type": "postback",
+              "label": "富欣",
+              "data": "action=supplier_confirm&row_id=0&choice=富欣&score=100.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "富煌商行",
+              "data": "action=supplier_confirm&row_id=0&choice=富煌商行&score=33.333333333333336"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "富鎂商行",
+              "data": "action=supplier_confirm&row_id=0&choice=富鎂商行&score=33.333333333333336"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "color": "#888888",
+            "action": {
+              "type": "postback",
+              "label": "都不是，新供應商",
+              "data": "action=supplier_new&supplier_name=富欣"
+            },
+            "margin": "sm"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bubble",
+      "size": "kilo",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#FFF3CD",
+        "contents": [
+          {
+            "type": "text",
+            "text": "這筆款項認不出來",
+            "weight": "bold",
+            "size": "md",
+            "color": "#333333"
+          },
+          {
+            "type": "text",
+            "text": "公司：福利社　待確認",
+            "size": "xs",
+            "color": "#666666"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "OCR 辨識到「富燚商行」",
+            "size": "sm",
+            "color": "#555555",
+            "wrap": true
+          },
+          {
+            "type": "text",
+            "text": "你看是不是這幾個之一：",
+            "size": "sm",
+            "color": "#333333",
+            "margin": "md"
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "action": {
+              "type": "postback",
+              "label": "富燚商行",
+              "data": "action=supplier_confirm&row_id=0&choice=富燚商行&score=100.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "富煌商行",
+              "data": "action=supplier_confirm&row_id=0&choice=富煌商行&score=75.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "富鎂商行",
+              "data": "action=supplier_confirm&row_id=0&choice=富鎂商行&score=75.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "color": "#888888",
+            "action": {
+              "type": "postback",
+              "label": "都不是，新供應商",
+              "data": "action=supplier_new&supplier_name=富燚商行"
+            },
+            "margin": "sm"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bubble",
+      "size": "kilo",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#FFF3CD",
+        "contents": [
+          {
+            "type": "text",
+            "text": "這筆款項認不出來",
+            "weight": "bold",
+            "size": "md",
+            "color": "#333333"
+          },
+          {
+            "type": "text",
+            "text": "公司：福利社　待確認",
+            "size": "xs",
+            "color": "#666666"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "OCR 辨識到「富鎂商行」",
+            "size": "sm",
+            "color": "#555555",
+            "wrap": true
+          },
+          {
+            "type": "text",
+            "text": "你看是不是這幾個之一：",
+            "size": "sm",
+            "color": "#333333",
+            "margin": "md"
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "action": {
+              "type": "postback",
+              "label": "富鎂商行",
+              "data": "action=supplier_confirm&row_id=0&choice=富鎂商行&score=100.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "富煌商行",
+              "data": "action=supplier_confirm&row_id=0&choice=富煌商行&score=75.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "富燚商行",
+              "data": "action=supplier_confirm&row_id=0&choice=富燚商行&score=75.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "color": "#888888",
+            "action": {
+              "type": "postback",
+              "label": "都不是，新供應商",
+              "data": "action=supplier_new&supplier_name=富鎂商行"
+            },
+            "margin": "sm"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bubble",
+      "size": "kilo",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#FFF3CD",
+        "contents": [
+          {
+            "type": "text",
+            "text": "這筆款項認不出來",
+            "weight": "bold",
+            "size": "md",
+            "color": "#333333"
+          },
+          {
+            "type": "text",
+            "text": "公司：福利社　待確認",
+            "size": "xs",
+            "color": "#666666"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "OCR 辨識到「彰化」",
+            "size": "sm",
+            "color": "#555555",
+            "wrap": true
+          },
+          {
+            "type": "text",
+            "text": "你看是不是這幾個之一：",
+            "size": "sm",
+            "color": "#333333",
+            "margin": "md"
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "action": {
+              "type": "postback",
+              "label": "彰化",
+              "data": "action=supplier_confirm&row_id=0&choice=彰化&score=100.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "清新蛋行",
+              "data": "action=supplier_confirm&row_id=0&choice=清新蛋行&score=0.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "大興米糧行",
+              "data": "action=supplier_confirm&row_id=0&choice=大興米糧行&score=0.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "color": "#888888",
+            "action": {
+              "type": "postback",
+              "label": "都不是，新供應商",
+              "data": "action=supplier_new&supplier_name=彰化"
+            },
+            "margin": "sm"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bubble",
+      "size": "kilo",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#FFF3CD",
+        "contents": [
+          {
+            "type": "text",
+            "text": "這筆款項認不出來",
+            "weight": "bold",
+            "size": "md",
+            "color": "#333333"
+          },
+          {
+            "type": "text",
+            "text": "公司：福利社　待確認",
+            "size": "xs",
+            "color": "#666666"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "OCR 辨識到「忻逸食品有限公司」",
+            "size": "sm",
+            "color": "#555555",
+            "wrap": true
+          },
+          {
+            "type": "text",
+            "text": "你看是不是這幾個之一：",
+            "size": "sm",
+            "color": "#333333",
+            "margin": "md"
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "action": {
+              "type": "postback",
+              "label": "忻逸食品有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=忻逸食品有限公司&score=100.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "圻逸食品有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=圻逸食品有限公司&score=87.5"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "昕逸食品有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=昕逸食品有限公司&score=87.5"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "color": "#888888",
+            "action": {
+              "type": "postback",
+              "label": "都不是，新供應商",
+              "data": "action=supplier_new&supplier_name=忻逸食品有限公司"
+            },
+            "margin": "sm"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bubble",
+      "size": "kilo",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#FFF3CD",
+        "contents": [
+          {
+            "type": "text",
+            "text": "這筆款項認不出來",
+            "weight": "bold",
+            "size": "md",
+            "color": "#333333"
+          },
+          {
+            "type": "text",
+            "text": "公司：福利社　待確認",
+            "size": "xs",
+            "color": "#666666"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "OCR 辨識到「昕逸食品有限公司」",
+            "size": "sm",
+            "color": "#555555",
+            "wrap": true
+          },
+          {
+            "type": "text",
+            "text": "你看是不是這幾個之一：",
+            "size": "sm",
+            "color": "#333333",
+            "margin": "md"
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "action": {
+              "type": "postback",
+              "label": "昕逸食品有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=昕逸食品有限公司&score=100.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "圻逸食品有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=圻逸食品有限公司&score=87.5"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "忻逸食品有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=忻逸食品有限公司&score=87.5"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "color": "#888888",
+            "action": {
+              "type": "postback",
+              "label": "都不是，新供應商",
+              "data": "action=supplier_new&supplier_name=昕逸食品有限公司"
+            },
+            "margin": "sm"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bubble",
+      "size": "kilo",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#FFF3CD",
+        "contents": [
+          {
+            "type": "text",
+            "text": "這筆款項認不出來",
+            "weight": "bold",
+            "size": "md",
+            "color": "#333333"
+          },
+          {
+            "type": "text",
+            "text": "公司：福利社　筆數：3筆　金額：39,686元",
+            "size": "xs",
+            "color": "#666666"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "OCR 辨識到「清新蛋行」",
+            "size": "sm",
+            "color": "#555555",
+            "wrap": true
+          },
+          {
+            "type": "text",
+            "text": "你看是不是這幾個之一：",
+            "size": "sm",
+            "color": "#333333",
+            "margin": "md"
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "action": {
+              "type": "postback",
+              "label": "清新蛋行",
+              "data": "action=supplier_confirm&row_id=0&choice=清新蛋行&score=100.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "富煌商行",
+              "data": "action=supplier_confirm&row_id=0&choice=富煌商行&score=25.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "富鎂商行",
+              "data": "action=supplier_confirm&row_id=0&choice=富鎂商行&score=25.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "color": "#888888",
+            "action": {
+              "type": "postback",
+              "label": "都不是，新供應商",
+              "data": "action=supplier_new&supplier_name=清新蛋行"
+            },
+            "margin": "sm"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bubble",
+      "size": "kilo",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#FFF3CD",
+        "contents": [
+          {
+            "type": "text",
+            "text": "這筆款項認不出來",
+            "weight": "bold",
+            "size": "md",
+            "color": "#333333"
+          },
+          {
+            "type": "text",
+            "text": "公司：福利社　待確認",
+            "size": "xs",
+            "color": "#666666"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "OCR 辨識到「祈逸食品有限公司」",
+            "size": "sm",
+            "color": "#555555",
+            "wrap": true
+          },
+          {
+            "type": "text",
+            "text": "你看是不是這幾個之一：",
+            "size": "sm",
+            "color": "#333333",
+            "margin": "md"
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "action": {
+              "type": "postback",
+              "label": "祈逸食品有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=祈逸食品有限公司&score=100.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "圻逸食品有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=圻逸食品有限公司&score=87.5"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "忻逸食品有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=忻逸食品有限公司&score=87.5"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "color": "#888888",
+            "action": {
+              "type": "postback",
+              "label": "都不是，新供應商",
+              "data": "action=supplier_new&supplier_name=祈逸食品有限公司"
+            },
+            "margin": "sm"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bubble",
+      "size": "kilo",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#FFF3CD",
+        "contents": [
+          {
+            "type": "text",
+            "text": "這筆款項認不出來",
+            "weight": "bold",
+            "size": "md",
+            "color": "#333333"
+          },
+          {
+            "type": "text",
+            "text": "公司：福利社　筆數：1筆　金額：2,200元",
+            "size": "xs",
+            "color": "#666666"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "OCR 辨識到「與眾」",
+            "size": "sm",
+            "color": "#555555",
+            "wrap": true
+          },
+          {
+            "type": "text",
+            "text": "你看是不是這幾個之一：",
+            "size": "sm",
+            "color": "#333333",
+            "margin": "md"
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "action": {
+              "type": "postback",
+              "label": "與眾",
+              "data": "action=supplier_confirm&row_id=0&choice=與眾&score=100.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "清新蛋行",
+              "data": "action=supplier_confirm&row_id=0&choice=清新蛋行&score=0.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "大興米糧行",
+              "data": "action=supplier_confirm&row_id=0&choice=大興米糧行&score=0.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "color": "#888888",
+            "action": {
+              "type": "postback",
+              "label": "都不是，新供應商",
+              "data": "action=supplier_new&supplier_name=與眾"
+            },
+            "margin": "sm"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bubble",
+      "size": "kilo",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#FFF3CD",
+        "contents": [
+          {
+            "type": "text",
+            "text": "這筆款項認不出來",
+            "weight": "bold",
+            "size": "md",
+            "color": "#333333"
+          },
+          {
+            "type": "text",
+            "text": "公司：福利社　筆數：1筆　金額：1,740元",
+            "size": "xs",
+            "color": "#666666"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "OCR 辨識到「興農」",
+            "size": "sm",
+            "color": "#555555",
+            "wrap": true
+          },
+          {
+            "type": "text",
+            "text": "你看是不是這幾個之一：",
+            "size": "sm",
+            "color": "#333333",
+            "margin": "md"
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "action": {
+              "type": "postback",
+              "label": "興農",
+              "data": "action=supplier_confirm&row_id=0&choice=興農&score=100.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "大興米糧行",
+              "data": "action=supplier_confirm&row_id=0&choice=大興米糧行&score=28.57142857142857"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "興丁蔬菜物流",
+              "data": "action=supplier_confirm&row_id=0&choice=興丁蔬菜物流&score=25.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "color": "#888888",
+            "action": {
+              "type": "postback",
+              "label": "都不是，新供應商",
+              "data": "action=supplier_new&supplier_name=興農"
+            },
+            "margin": "sm"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bubble",
+      "size": "kilo",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#FFF3CD",
+        "contents": [
+          {
+            "type": "text",
+            "text": "這筆款項認不出來",
+            "weight": "bold",
+            "size": "md",
+            "color": "#333333"
+          },
+          {
+            "type": "text",
+            "text": "公司：福利社　待確認",
+            "size": "xs",
+            "color": "#666666"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "OCR 辨識到「詠源順環保有限公司」",
+            "size": "sm",
+            "color": "#555555",
+            "wrap": true
+          },
+          {
+            "type": "text",
+            "text": "你看是不是這幾個之一：",
+            "size": "sm",
+            "color": "#333333",
+            "margin": "md"
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "action": {
+              "type": "postback",
+              "label": "詠源順環保有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=詠源順環保有限公司&score=100.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "潮崴有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=潮崴有限公司&score=53.333333333333336"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "瀚崴有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=瀚崴有限公司&score=53.333333333333336"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "color": "#888888",
+            "action": {
+              "type": "postback",
+              "label": "都不是，新供應商",
+              "data": "action=supplier_new&supplier_name=詠源順環保有限公司"
+            },
+            "margin": "sm"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bubble",
+      "size": "kilo",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#FFF3CD",
+        "contents": [
+          {
+            "type": "text",
+            "text": "這筆款項認不出來",
+            "weight": "bold",
+            "size": "md",
+            "color": "#333333"
+          },
+          {
+            "type": "text",
+            "text": "公司：福利社　筆數：1筆　金額：69,600元",
+            "size": "xs",
+            "color": "#666666"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "OCR 辨識到「豐盈碾米工廠」",
+            "size": "sm",
+            "color": "#555555",
+            "wrap": true
+          },
+          {
+            "type": "text",
+            "text": "你看是不是這幾個之一：",
+            "size": "sm",
+            "color": "#333333",
+            "margin": "md"
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "action": {
+              "type": "postback",
+              "label": "豐盈碾米工廠",
+              "data": "action=supplier_confirm&row_id=0&choice=豐盈碾米工廠&score=100.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "台達一廠",
+              "data": "action=supplier_confirm&row_id=0&choice=台達一廠&score=19.999999999999996"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "大興米糧行",
+              "data": "action=supplier_confirm&row_id=0&choice=大興米糧行&score=18.181818181818176"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "color": "#888888",
+            "action": {
+              "type": "postback",
+              "label": "都不是，新供應商",
+              "data": "action=supplier_new&supplier_name=豐盈碾米工廠"
+            },
+            "margin": "sm"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bubble",
+      "size": "kilo",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#FFF3CD",
+        "contents": [
+          {
+            "type": "text",
+            "text": "這筆款項認不出來",
+            "weight": "bold",
+            "size": "md",
+            "color": "#333333"
+          },
+          {
+            "type": "text",
+            "text": "公司：福利社　筆數：1筆　金額：10,820元",
+            "size": "xs",
+            "color": "#666666"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "OCR 辨識到「雙子星食品原料」",
+            "size": "sm",
+            "color": "#555555",
+            "wrap": true
+          },
+          {
+            "type": "text",
+            "text": "你看是不是這幾個之一：",
+            "size": "sm",
+            "color": "#333333",
+            "margin": "md"
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "action": {
+              "type": "postback",
+              "label": "雙子星食品原料",
+              "data": "action=supplier_confirm&row_id=0&choice=雙子星食品原料&score=100.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "雙子星食品",
+              "data": "action=supplier_confirm&row_id=0&choice=雙子星食品&score=83.33333333333334"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "冷凍食品",
+              "data": "action=supplier_confirm&row_id=0&choice=冷凍食品&score=36.36363636363637"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "color": "#888888",
+            "action": {
+              "type": "postback",
+              "label": "都不是，新供應商",
+              "data": "action=supplier_new&supplier_name=雙子星食品原料"
+            },
+            "margin": "sm"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bubble",
+      "size": "kilo",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#FFF3CD",
+        "contents": [
+          {
+            "type": "text",
+            "text": "這筆款項認不出來",
+            "weight": "bold",
+            "size": "md",
+            "color": "#333333"
+          },
+          {
+            "type": "text",
+            "text": "公司：福利社　筆數：7筆　金額：320元",
+            "size": "xs",
+            "color": "#666666"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "OCR 辨識到「（未識別）」",
+            "size": "sm",
+            "color": "#555555",
+            "wrap": true
+          },
+          {
+            "type": "text",
+            "text": "你看是不是這幾個之一：",
+            "size": "sm",
+            "color": "#333333",
+            "margin": "md"
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "action": {
+              "type": "postback",
+              "label": "台吉電2廠（廢油回收）",
+              "data": "action=supplier_confirm&row_id=0&choice=台吉電2廠（廢油回收）&score=25.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "清新蛋行",
+              "data": "action=supplier_confirm&row_id=0&choice=清新蛋行&score=0.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "大興米糧行",
+              "data": "action=supplier_confirm&row_id=0&choice=大興米糧行&score=0.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "color": "#888888",
+            "action": {
+              "type": "postback",
+              "label": "都不是，新供應商",
+              "data": "action=supplier_new&supplier_name=（未識別）"
+            },
+            "margin": "sm"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bubble",
+      "size": "kilo",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#FFF3CD",
+        "contents": [
+          {
+            "type": "text",
+            "text": "這筆款項認不出來",
+            "weight": "bold",
+            "size": "md",
+            "color": "#333333"
+          },
+          {
+            "type": "text",
+            "text": "公司：台達2廠　待確認",
+            "size": "xs",
+            "color": "#666666"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "OCR 辨識到「圻逸食品有限公司」",
+            "size": "sm",
+            "color": "#555555",
+            "wrap": true
+          },
+          {
+            "type": "text",
+            "text": "你看是不是這幾個之一：",
+            "size": "sm",
+            "color": "#333333",
+            "margin": "md"
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "action": {
+              "type": "postback",
+              "label": "圻逸食品有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=圻逸食品有限公司&score=100.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "忻逸食品有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=忻逸食品有限公司&score=87.5"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "昕逸食品有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=昕逸食品有限公司&score=87.5"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "color": "#888888",
+            "action": {
+              "type": "postback",
+              "label": "都不是，新供應商",
+              "data": "action=supplier_new&supplier_name=圻逸食品有限公司"
+            },
+            "margin": "sm"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bubble",
+      "size": "kilo",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#FFF3CD",
+        "contents": [
+          {
+            "type": "text",
+            "text": "這筆款項認不出來",
+            "weight": "bold",
+            "size": "md",
+            "color": "#333333"
+          },
+          {
+            "type": "text",
+            "text": "公司：台達2廠　筆數：9筆　金額：53,283元",
+            "size": "xs",
+            "color": "#666666"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "OCR 辨識到「清新蛋行」",
+            "size": "sm",
+            "color": "#555555",
+            "wrap": true
+          },
+          {
+            "type": "text",
+            "text": "你看是不是這幾個之一：",
+            "size": "sm",
+            "color": "#333333",
+            "margin": "md"
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "action": {
+              "type": "postback",
+              "label": "清新蛋行",
+              "data": "action=supplier_confirm&row_id=0&choice=清新蛋行&score=100.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "富煌商行",
+              "data": "action=supplier_confirm&row_id=0&choice=富煌商行&score=25.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "富鎂商行",
+              "data": "action=supplier_confirm&row_id=0&choice=富鎂商行&score=25.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "color": "#888888",
+            "action": {
+              "type": "postback",
+              "label": "都不是，新供應商",
+              "data": "action=supplier_new&supplier_name=清新蛋行"
+            },
+            "margin": "sm"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bubble",
+      "size": "kilo",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#FFF3CD",
+        "contents": [
+          {
+            "type": "text",
+            "text": "這筆款項認不出來",
+            "weight": "bold",
+            "size": "md",
+            "color": "#333333"
+          },
+          {
+            "type": "text",
+            "text": "公司：台達2廠　筆數：35筆　金額：123,143元",
+            "size": "xs",
+            "color": "#666666"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "OCR 辨識到「黃子儀蔬菜物流」",
+            "size": "sm",
+            "color": "#555555",
+            "wrap": true
+          },
+          {
+            "type": "text",
+            "text": "你看是不是這幾個之一：",
+            "size": "sm",
+            "color": "#333333",
+            "margin": "md"
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "action": {
+              "type": "postback",
+              "label": "黃子儀蔬菜物流",
+              "data": "action=supplier_confirm&row_id=0&choice=黃子儀蔬菜物流&score=100.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "興丁蔬菜物流",
+              "data": "action=supplier_confirm&row_id=0&choice=興丁蔬菜物流&score=61.53846153846154"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "雙子星食品",
+              "data": "action=supplier_confirm&row_id=0&choice=雙子星食品&score=16.666666666666664"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "color": "#888888",
+            "action": {
+              "type": "postback",
+              "label": "都不是，新供應商",
+              "data": "action=supplier_new&supplier_name=黃子儀蔬菜物流"
+            },
+            "margin": "sm"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bubble",
+      "size": "kilo",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#FFF3CD",
+        "contents": [
+          {
+            "type": "text",
+            "text": "這筆款項認不出來",
+            "weight": "bold",
+            "size": "md",
+            "color": "#333333"
+          },
+          {
+            "type": "text",
+            "text": "公司：台達2廠　筆數：11筆　金額：82,956元",
+            "size": "xs",
+            "color": "#666666"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "OCR 辨識到「雙子星食品原料」",
+            "size": "sm",
+            "color": "#555555",
+            "wrap": true
+          },
+          {
+            "type": "text",
+            "text": "你看是不是這幾個之一：",
+            "size": "sm",
+            "color": "#333333",
+            "margin": "md"
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "action": {
+              "type": "postback",
+              "label": "雙子星食品原料",
+              "data": "action=supplier_confirm&row_id=0&choice=雙子星食品原料&score=100.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "雙子星食品",
+              "data": "action=supplier_confirm&row_id=0&choice=雙子星食品&score=83.33333333333334"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "冷凍食品",
+              "data": "action=supplier_confirm&row_id=0&choice=冷凍食品&score=36.36363636363637"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "color": "#888888",
+            "action": {
+              "type": "postback",
+              "label": "都不是，新供應商",
+              "data": "action=supplier_new&supplier_name=雙子星食品原料"
+            },
+            "margin": "sm"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bubble",
+      "size": "kilo",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#FFF3CD",
+        "contents": [
+          {
+            "type": "text",
+            "text": "這筆款項認不出來",
+            "weight": "bold",
+            "size": "md",
+            "color": "#333333"
+          },
+          {
+            "type": "text",
+            "text": "公司：台達2廠　筆數：6筆　金額：208,350元",
+            "size": "xs",
+            "color": "#666666"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "OCR 辨識到「晨昌公司」",
+            "size": "sm",
+            "color": "#555555",
+            "wrap": true
+          },
+          {
+            "type": "text",
+            "text": "你看是不是這幾個之一：",
+            "size": "sm",
+            "color": "#333333",
+            "margin": "md"
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "action": {
+              "type": "postback",
+              "label": "晨昌公司",
+              "data": "action=supplier_confirm&row_id=0&choice=晨昌公司&score=100.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "潮崴有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=潮崴有限公司&score=40.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "瀚崴有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=瀚崴有限公司&score=40.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "color": "#888888",
+            "action": {
+              "type": "postback",
+              "label": "都不是，新供應商",
+              "data": "action=supplier_new&supplier_name=晨昌公司"
+            },
+            "margin": "sm"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bubble",
+      "size": "kilo",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#FFF3CD",
+        "contents": [
+          {
+            "type": "text",
+            "text": "這筆款項認不出來",
+            "weight": "bold",
+            "size": "md",
+            "color": "#333333"
+          },
+          {
+            "type": "text",
+            "text": "公司：台達2廠　筆數：8筆　金額：32,270元",
+            "size": "xs",
+            "color": "#666666"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "OCR 辨識到「光泉食品(股)公司」",
+            "size": "sm",
+            "color": "#555555",
+            "wrap": true
+          },
+          {
+            "type": "text",
+            "text": "你看是不是這幾個之一：",
+            "size": "sm",
+            "color": "#333333",
+            "margin": "md"
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "action": {
+              "type": "postback",
+              "label": "光泉食品(股)公司",
+              "data": "action=supplier_confirm&row_id=0&choice=光泉食品(股)公司&score=100.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "中一食品股份有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=中一食品股份有限公司&score=52.63157894736843"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "圻逸食品有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=圻逸食品有限公司&score=47.05882352941176"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "color": "#888888",
+            "action": {
+              "type": "postback",
+              "label": "都不是，新供應商",
+              "data": "action=supplier_new&supplier_name=光泉食品(股)公司"
+            },
+            "margin": "sm"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bubble",
+      "size": "kilo",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#FFF3CD",
+        "contents": [
+          {
+            "type": "text",
+            "text": "這筆款項認不出來",
+            "weight": "bold",
+            "size": "md",
+            "color": "#333333"
+          },
+          {
+            "type": "text",
+            "text": "公司：台達2廠　筆數：1筆　金額：18,988元",
+            "size": "xs",
+            "color": "#666666"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "OCR 辨識到「上論食品有限公司」",
+            "size": "sm",
+            "color": "#555555",
+            "wrap": true
+          },
+          {
+            "type": "text",
+            "text": "你看是不是這幾個之一：",
+            "size": "sm",
+            "color": "#333333",
+            "margin": "md"
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "action": {
+              "type": "postback",
+              "label": "上論食品有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=上論食品有限公司&score=100.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "圻逸食品有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=圻逸食品有限公司&score=75.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "忻逸食品有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=忻逸食品有限公司&score=75.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "color": "#888888",
+            "action": {
+              "type": "postback",
+              "label": "都不是，新供應商",
+              "data": "action=supplier_new&supplier_name=上論食品有限公司"
+            },
+            "margin": "sm"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bubble",
+      "size": "kilo",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#FFF3CD",
+        "contents": [
+          {
+            "type": "text",
+            "text": "這筆款項認不出來",
+            "weight": "bold",
+            "size": "md",
+            "color": "#333333"
+          },
+          {
+            "type": "text",
+            "text": "公司：台達2廠　筆數：7筆　金額：3,420元",
+            "size": "xs",
+            "color": "#666666"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "OCR 辨識到「光泉食品(股)公司」",
+            "size": "sm",
+            "color": "#555555",
+            "wrap": true
+          },
+          {
+            "type": "text",
+            "text": "你看是不是這幾個之一：",
+            "size": "sm",
+            "color": "#333333",
+            "margin": "md"
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "action": {
+              "type": "postback",
+              "label": "光泉食品(股)公司",
+              "data": "action=supplier_confirm&row_id=0&choice=光泉食品(股)公司&score=100.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "中一食品股份有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=中一食品股份有限公司&score=52.63157894736843"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "圻逸食品有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=圻逸食品有限公司&score=47.05882352941176"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "color": "#888888",
+            "action": {
+              "type": "postback",
+              "label": "都不是，新供應商",
+              "data": "action=supplier_new&supplier_name=光泉食品(股)公司"
+            },
+            "margin": "sm"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bubble",
+      "size": "kilo",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#FFF3CD",
+        "contents": [
+          {
+            "type": "text",
+            "text": "這筆款項認不出來",
+            "weight": "bold",
+            "size": "md",
+            "color": "#333333"
+          },
+          {
+            "type": "text",
+            "text": "公司：台達2廠　筆數：17筆　金額：74,778元",
+            "size": "xs",
+            "color": "#666666"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "OCR 辨識到「冷凍食品」",
+            "size": "sm",
+            "color": "#555555",
+            "wrap": true
+          },
+          {
+            "type": "text",
+            "text": "你看是不是這幾個之一：",
+            "size": "sm",
+            "color": "#333333",
+            "margin": "md"
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "action": {
+              "type": "postback",
+              "label": "冷凍食品",
+              "data": "action=supplier_confirm&row_id=0&choice=冷凍食品&score=100.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "東盟冷凍食品有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=東盟冷凍食品有限公司&score=57.14285714285714"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "圻逸食品",
+              "data": "action=supplier_confirm&row_id=0&choice=圻逸食品&score=50.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "color": "#888888",
+            "action": {
+              "type": "postback",
+              "label": "都不是，新供應商",
+              "data": "action=supplier_new&supplier_name=冷凍食品"
+            },
+            "margin": "sm"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bubble",
+      "size": "kilo",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#FFF3CD",
+        "contents": [
+          {
+            "type": "text",
+            "text": "這筆款項認不出來",
+            "weight": "bold",
+            "size": "md",
+            "color": "#333333"
+          },
+          {
+            "type": "text",
+            "text": "公司：台達2廠　待確認",
+            "size": "xs",
+            "color": "#666666"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "OCR 辨識到「台吉電2廠」",
+            "size": "sm",
+            "color": "#555555",
+            "wrap": true
+          },
+          {
+            "type": "text",
+            "text": "你看是不是這幾個之一：",
+            "size": "sm",
+            "color": "#333333",
+            "margin": "md"
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "action": {
+              "type": "postback",
+              "label": "台吉電2廠",
+              "data": "action=supplier_confirm&row_id=0&choice=台吉電2廠&score=100.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "台吉電2廠（廢油回收）",
+              "data": "action=supplier_confirm&row_id=0&choice=台吉電2廠（廢油回收）&score=62.5"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "台電",
+              "data": "action=supplier_confirm&row_id=0&choice=台電&score=57.14285714285714"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "color": "#888888",
+            "action": {
+              "type": "postback",
+              "label": "都不是，新供應商",
+              "data": "action=supplier_new&supplier_name=台吉電2廠"
+            },
+            "margin": "sm"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bubble",
+      "size": "kilo",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#FFF3CD",
+        "contents": [
+          {
+            "type": "text",
+            "text": "這筆款項認不出來",
+            "weight": "bold",
+            "size": "md",
+            "color": "#333333"
+          },
+          {
+            "type": "text",
+            "text": "公司：台達2廠　待確認",
+            "size": "xs",
+            "color": "#666666"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "OCR 辨識到「台吉電2廠（廢油回收）」",
+            "size": "sm",
+            "color": "#555555",
+            "wrap": true
+          },
+          {
+            "type": "text",
+            "text": "你看是不是這幾個之一：",
+            "size": "sm",
+            "color": "#333333",
+            "margin": "md"
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "action": {
+              "type": "postback",
+              "label": "台吉電2廠（廢油回收）",
+              "data": "action=supplier_confirm&row_id=0&choice=台吉電2廠（廢油回收）&score=100.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "台吉電2廠",
+              "data": "action=supplier_confirm&row_id=0&choice=台吉電2廠&score=62.5"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "台達電-廠台照",
+              "data": "action=supplier_confirm&row_id=0&choice=台達電-廠台照&score=33.333333333333336"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "color": "#888888",
+            "action": {
+              "type": "postback",
+              "label": "都不是，新供應商",
+              "data": "action=supplier_new&supplier_name=台吉電2廠（廢油回收）"
+            },
+            "margin": "sm"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bubble",
+      "size": "kilo",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#FFF3CD",
+        "contents": [
+          {
+            "type": "text",
+            "text": "這筆款項認不出來",
+            "weight": "bold",
+            "size": "md",
+            "color": "#333333"
+          },
+          {
+            "type": "text",
+            "text": "公司：台達2廠　待確認",
+            "size": "xs",
+            "color": "#666666"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "OCR 辨識到「圻逸食品」",
+            "size": "sm",
+            "color": "#555555",
+            "wrap": true
+          },
+          {
+            "type": "text",
+            "text": "你看是不是這幾個之一：",
+            "size": "sm",
+            "color": "#333333",
+            "margin": "md"
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "action": {
+              "type": "postback",
+              "label": "圻逸食品",
+              "data": "action=supplier_confirm&row_id=0&choice=圻逸食品&score=100.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "圻逸食品有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=圻逸食品有限公司&score=66.66666666666667"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "冷凍食品",
+              "data": "action=supplier_confirm&row_id=0&choice=冷凍食品&score=50.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "color": "#888888",
+            "action": {
+              "type": "postback",
+              "label": "都不是，新供應商",
+              "data": "action=supplier_new&supplier_name=圻逸食品"
+            },
+            "margin": "sm"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bubble",
+      "size": "kilo",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#FFF3CD",
+        "contents": [
+          {
+            "type": "text",
+            "text": "這筆款項認不出來",
+            "weight": "bold",
+            "size": "md",
+            "color": "#333333"
+          },
+          {
+            "type": "text",
+            "text": "公司：台達2廠　筆數：17筆　金額：1,080元",
+            "size": "xs",
+            "color": "#666666"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "OCR 辨識到「大成長城」",
+            "size": "sm",
+            "color": "#555555",
+            "wrap": true
+          },
+          {
+            "type": "text",
+            "text": "你看是不是這幾個之一：",
+            "size": "sm",
+            "color": "#333333",
+            "margin": "md"
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "action": {
+              "type": "postback",
+              "label": "大成長城",
+              "data": "action=supplier_confirm&row_id=0&choice=大成長城&score=100.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "大成長城企業股份有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=大成長城企業股份有限公司&score=50.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "大興米糧行",
+              "data": "action=supplier_confirm&row_id=0&choice=大興米糧行&score=22.22222222222222"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "color": "#888888",
+            "action": {
+              "type": "postback",
+              "label": "都不是，新供應商",
+              "data": "action=supplier_new&supplier_name=大成長城"
+            },
+            "margin": "sm"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bubble",
+      "size": "kilo",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#FFF3CD",
+        "contents": [
+          {
+            "type": "text",
+            "text": "這筆款項認不出來",
+            "weight": "bold",
+            "size": "md",
+            "color": "#333333"
+          },
+          {
+            "type": "text",
+            "text": "公司：台達2廠　筆數：18筆　金額：486,652元",
+            "size": "xs",
+            "color": "#666666"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "OCR 辨識到「大成長城企業股份有限公司」",
+            "size": "sm",
+            "color": "#555555",
+            "wrap": true
+          },
+          {
+            "type": "text",
+            "text": "你看是不是這幾個之一：",
+            "size": "sm",
+            "color": "#333333",
+            "margin": "md"
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "action": {
+              "type": "postback",
+              "label": "大成長城企業股份有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=大成長城企業股份有限公司&score=100.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "常統企業股份有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=常統企業股份有限公司&score=72.72727272727273"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "美藍雷股份有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=美藍雷股份有限公司&score=57.14285714285714"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "color": "#888888",
+            "action": {
+              "type": "postback",
+              "label": "都不是，新供應商",
+              "data": "action=supplier_new&supplier_name=大成長城企業股份有限公司"
+            },
+            "margin": "sm"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bubble",
+      "size": "kilo",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#FFF3CD",
+        "contents": [
+          {
+            "type": "text",
+            "text": "這筆款項認不出來",
+            "weight": "bold",
+            "size": "md",
+            "color": "#333333"
+          },
+          {
+            "type": "text",
+            "text": "公司：台達2廠　筆數：4筆　金額：14,040元",
+            "size": "xs",
+            "color": "#666666"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "OCR 辨識到「振義食品」",
+            "size": "sm",
+            "color": "#555555",
+            "wrap": true
+          },
+          {
+            "type": "text",
+            "text": "你看是不是這幾個之一：",
+            "size": "sm",
+            "color": "#333333",
+            "margin": "md"
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "action": {
+              "type": "postback",
+              "label": "振義食品",
+              "data": "action=supplier_confirm&row_id=0&choice=振義食品&score=100.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "冷凍食品",
+              "data": "action=supplier_confirm&row_id=0&choice=冷凍食品&score=50.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "圻逸食品",
+              "data": "action=supplier_confirm&row_id=0&choice=圻逸食品&score=50.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "color": "#888888",
+            "action": {
+              "type": "postback",
+              "label": "都不是，新供應商",
+              "data": "action=supplier_new&supplier_name=振義食品"
+            },
+            "margin": "sm"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bubble",
+      "size": "kilo",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#FFF3CD",
+        "contents": [
+          {
+            "type": "text",
+            "text": "這筆款項認不出來",
+            "weight": "bold",
+            "size": "md",
+            "color": "#333333"
+          },
+          {
+            "type": "text",
+            "text": "公司：台達2廠　筆數：2筆　金額：32,374元",
+            "size": "xs",
+            "color": "#666666"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "OCR 辨識到「晨昌公司」",
+            "size": "sm",
+            "color": "#555555",
+            "wrap": true
+          },
+          {
+            "type": "text",
+            "text": "你看是不是這幾個之一：",
+            "size": "sm",
+            "color": "#333333",
+            "margin": "md"
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "action": {
+              "type": "postback",
+              "label": "晨昌公司",
+              "data": "action=supplier_confirm&row_id=0&choice=晨昌公司&score=100.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "潮崴有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=潮崴有限公司&score=40.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "瀚崴有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=瀚崴有限公司&score=40.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "color": "#888888",
+            "action": {
+              "type": "postback",
+              "label": "都不是，新供應商",
+              "data": "action=supplier_new&supplier_name=晨昌公司"
+            },
+            "margin": "sm"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bubble",
+      "size": "kilo",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#FFF3CD",
+        "contents": [
+          {
+            "type": "text",
+            "text": "這筆款項認不出來",
+            "weight": "bold",
+            "size": "md",
+            "color": "#333333"
+          },
+          {
+            "type": "text",
+            "text": "公司：台達2廠　筆數：2筆　金額：13,490元",
+            "size": "xs",
+            "color": "#666666"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "OCR 辨識到「東盟冷凍食品有限公司」",
+            "size": "sm",
+            "color": "#555555",
+            "wrap": true
+          },
+          {
+            "type": "text",
+            "text": "你看是不是這幾個之一：",
+            "size": "sm",
+            "color": "#333333",
+            "margin": "md"
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "action": {
+              "type": "postback",
+              "label": "東盟冷凍食品有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=東盟冷凍食品有限公司&score=100.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "東東食品有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=東東食品有限公司&score=77.77777777777779"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "圻逸食品有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=圻逸食品有限公司&score=66.66666666666667"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "color": "#888888",
+            "action": {
+              "type": "postback",
+              "label": "都不是，新供應商",
+              "data": "action=supplier_new&supplier_name=東盟冷凍食品有限公司"
+            },
+            "margin": "sm"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bubble",
+      "size": "kilo",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#FFF3CD",
+        "contents": [
+          {
+            "type": "text",
+            "text": "這筆款項認不出來",
+            "weight": "bold",
+            "size": "md",
+            "color": "#333333"
+          },
+          {
+            "type": "text",
+            "text": "公司：台達2廠　筆數：1筆　金額：11,696元",
+            "size": "xs",
+            "color": "#666666"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "OCR 辨識到「永勤食品有限公司」",
+            "size": "sm",
+            "color": "#555555",
+            "wrap": true
+          },
+          {
+            "type": "text",
+            "text": "你看是不是這幾個之一：",
+            "size": "sm",
+            "color": "#333333",
+            "margin": "md"
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "action": {
+              "type": "postback",
+              "label": "永勤食品有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=永勤食品有限公司&score=100.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "圻逸食品有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=圻逸食品有限公司&score=75.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "上論食品有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=上論食品有限公司&score=75.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "color": "#888888",
+            "action": {
+              "type": "postback",
+              "label": "都不是，新供應商",
+              "data": "action=supplier_new&supplier_name=永勤食品有限公司"
+            },
+            "margin": "sm"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bubble",
+      "size": "kilo",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#FFF3CD",
+        "contents": [
+          {
+            "type": "text",
+            "text": "這筆款項認不出來",
+            "weight": "bold",
+            "size": "md",
+            "color": "#333333"
+          },
+          {
+            "type": "text",
+            "text": "公司：台達2廠　筆數：1筆　金額：55,073元",
+            "size": "xs",
+            "color": "#666666"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "OCR 辨識到「清新蛋行」",
+            "size": "sm",
+            "color": "#555555",
+            "wrap": true
+          },
+          {
+            "type": "text",
+            "text": "你看是不是這幾個之一：",
+            "size": "sm",
+            "color": "#333333",
+            "margin": "md"
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "action": {
+              "type": "postback",
+              "label": "清新蛋行",
+              "data": "action=supplier_confirm&row_id=0&choice=清新蛋行&score=100.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "富煌商行",
+              "data": "action=supplier_confirm&row_id=0&choice=富煌商行&score=25.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "富鎂商行",
+              "data": "action=supplier_confirm&row_id=0&choice=富鎂商行&score=25.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "color": "#888888",
+            "action": {
+              "type": "postback",
+              "label": "都不是，新供應商",
+              "data": "action=supplier_new&supplier_name=清新蛋行"
+            },
+            "margin": "sm"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bubble",
+      "size": "kilo",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#FFF3CD",
+        "contents": [
+          {
+            "type": "text",
+            "text": "這筆款項認不出來",
+            "weight": "bold",
+            "size": "md",
+            "color": "#333333"
+          },
+          {
+            "type": "text",
+            "text": "公司：台達2廠　筆數：1筆　金額：8,200元",
+            "size": "xs",
+            "color": "#666666"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "OCR 辨識到「潮崴有限公司」",
+            "size": "sm",
+            "color": "#555555",
+            "wrap": true
+          },
+          {
+            "type": "text",
+            "text": "你看是不是這幾個之一：",
+            "size": "sm",
+            "color": "#333333",
+            "margin": "md"
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "action": {
+              "type": "postback",
+              "label": "潮崴有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=潮崴有限公司&score=100.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "瀚崴有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=瀚崴有限公司&score=83.33333333333334"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "圻逸食品有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=圻逸食品有限公司&score=57.14285714285714"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "color": "#888888",
+            "action": {
+              "type": "postback",
+              "label": "都不是，新供應商",
+              "data": "action=supplier_new&supplier_name=潮崴有限公司"
+            },
+            "margin": "sm"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bubble",
+      "size": "kilo",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#FFF3CD",
+        "contents": [
+          {
+            "type": "text",
+            "text": "這筆款項認不出來",
+            "weight": "bold",
+            "size": "md",
+            "color": "#333333"
+          },
+          {
+            "type": "text",
+            "text": "公司：台達2廠　筆數：4筆　金額：17,975元",
+            "size": "xs",
+            "color": "#666666"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "OCR 辨識到「瀚崴有限公司」",
+            "size": "sm",
+            "color": "#555555",
+            "wrap": true
+          },
+          {
+            "type": "text",
+            "text": "你看是不是這幾個之一：",
+            "size": "sm",
+            "color": "#333333",
+            "margin": "md"
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "action": {
+              "type": "postback",
+              "label": "瀚崴有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=瀚崴有限公司&score=100.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "潮崴有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=潮崴有限公司&score=83.33333333333334"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "圻逸食品有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=圻逸食品有限公司&score=57.14285714285714"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "color": "#888888",
+            "action": {
+              "type": "postback",
+              "label": "都不是，新供應商",
+              "data": "action=supplier_new&supplier_name=瀚崴有限公司"
+            },
+            "margin": "sm"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bubble",
+      "size": "kilo",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#FFF3CD",
+        "contents": [
+          {
+            "type": "text",
+            "text": "這筆款項認不出來",
+            "weight": "bold",
+            "size": "md",
+            "color": "#333333"
+          },
+          {
+            "type": "text",
+            "text": "公司：台達2廠　筆數：9筆　金額：46,598元",
+            "size": "xs",
+            "color": "#666666"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "OCR 辨識到「王凱食品有限公司」",
+            "size": "sm",
+            "color": "#555555",
+            "wrap": true
+          },
+          {
+            "type": "text",
+            "text": "你看是不是這幾個之一：",
+            "size": "sm",
+            "color": "#333333",
+            "margin": "md"
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "action": {
+              "type": "postback",
+              "label": "王凱食品有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=王凱食品有限公司&score=100.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "圻逸食品有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=圻逸食品有限公司&score=75.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "上論食品有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=上論食品有限公司&score=75.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "color": "#888888",
+            "action": {
+              "type": "postback",
+              "label": "都不是，新供應商",
+              "data": "action=supplier_new&supplier_name=王凱食品有限公司"
+            },
+            "margin": "sm"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bubble",
+      "size": "kilo",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#FFF3CD",
+        "contents": [
+          {
+            "type": "text",
+            "text": "這筆款項認不出來",
+            "weight": "bold",
+            "size": "md",
+            "color": "#333333"
+          },
+          {
+            "type": "text",
+            "text": "公司：台達2廠　筆數：16筆　金額：60,000元",
+            "size": "xs",
+            "color": "#666666"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "OCR 辨識到「美藍雷股份有限公司」",
+            "size": "sm",
+            "color": "#555555",
+            "wrap": true
+          },
+          {
+            "type": "text",
+            "text": "你看是不是這幾個之一：",
+            "size": "sm",
+            "color": "#333333",
+            "margin": "md"
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "action": {
+              "type": "postback",
+              "label": "美藍雷股份有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=美藍雷股份有限公司&score=100.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "美藍雷股份有限公司(EC)",
+              "data": "action=supplier_confirm&row_id=0&choice=美藍雷股份有限公司(EC)&score=81.81818181818181"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "美食家食材通路股份有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=美食家食材通路股份有限公司&score=63.63636363636363"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "color": "#888888",
+            "action": {
+              "type": "postback",
+              "label": "都不是，新供應商",
+              "data": "action=supplier_new&supplier_name=美藍雷股份有限公司"
+            },
+            "margin": "sm"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bubble",
+      "size": "kilo",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#FFF3CD",
+        "contents": [
+          {
+            "type": "text",
+            "text": "這筆款項認不出來",
+            "weight": "bold",
+            "size": "md",
+            "color": "#333333"
+          },
+          {
+            "type": "text",
+            "text": "公司：台達2廠　待確認",
+            "size": "xs",
+            "color": "#666666"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "OCR 辨識到「美藍雷股份有限公司(EC)」",
+            "size": "sm",
+            "color": "#555555",
+            "wrap": true
+          },
+          {
+            "type": "text",
+            "text": "你看是不是這幾個之一：",
+            "size": "sm",
+            "color": "#333333",
+            "margin": "md"
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "action": {
+              "type": "postback",
+              "label": "美藍雷股份有限公司(EC)",
+              "data": "action=supplier_confirm&row_id=0&choice=美藍雷股份有限公司(EC)&score=100.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "美藍雷股份有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=美藍雷股份有限公司&score=81.81818181818181"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "美食家食材通路股份有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=美食家食材通路股份有限公司&score=53.84615384615385"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "color": "#888888",
+            "action": {
+              "type": "postback",
+              "label": "都不是，新供應商",
+              "data": "action=supplier_new&supplier_name=美藍雷股份有限公司(EC)"
+            },
+            "margin": "sm"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bubble",
+      "size": "kilo",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#FFF3CD",
+        "contents": [
+          {
+            "type": "text",
+            "text": "這筆款項認不出來",
+            "weight": "bold",
+            "size": "md",
+            "color": "#333333"
+          },
+          {
+            "type": "text",
+            "text": "公司：台達2廠　筆數：13筆　金額：93,315元",
+            "size": "xs",
+            "color": "#666666"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "OCR 辨識到「美食家食材通路股份有限公司」",
+            "size": "sm",
+            "color": "#555555",
+            "wrap": true
+          },
+          {
+            "type": "text",
+            "text": "你看是不是這幾個之一：",
+            "size": "sm",
+            "color": "#333333",
+            "margin": "md"
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "action": {
+              "type": "postback",
+              "label": "美食家食材通路股份有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=美食家食材通路股份有限公司&score=100.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "美藍雷股份有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=美藍雷股份有限公司&score=63.63636363636363"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "中一食品股份有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=中一食品股份有限公司&score=60.86956521739131"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "color": "#888888",
+            "action": {
+              "type": "postback",
+              "label": "都不是，新供應商",
+              "data": "action=supplier_new&supplier_name=美食家食材通路股份有限公司"
+            },
+            "margin": "sm"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bubble",
+      "size": "kilo",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#FFF3CD",
+        "contents": [
+          {
+            "type": "text",
+            "text": "這筆款項認不出來",
+            "weight": "bold",
+            "size": "md",
+            "color": "#333333"
+          },
+          {
+            "type": "text",
+            "text": "公司：台達2廠　筆數：16筆　金額：47,167元",
+            "size": "xs",
+            "color": "#666666"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "OCR 辨識到「裕德食品企業有限公司」",
+            "size": "sm",
+            "color": "#555555",
+            "wrap": true
+          },
+          {
+            "type": "text",
+            "text": "你看是不是這幾個之一：",
+            "size": "sm",
+            "color": "#333333",
+            "margin": "md"
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "action": {
+              "type": "postback",
+              "label": "裕德食品企業有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=裕德食品企業有限公司&score=100.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "圻逸食品有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=圻逸食品有限公司&score=66.66666666666667"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "上論食品有限公司",
+              "data": "action=supplier_confirm&row_id=0&choice=上論食品有限公司&score=66.66666666666667"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "color": "#888888",
+            "action": {
+              "type": "postback",
+              "label": "都不是，新供應商",
+              "data": "action=supplier_new&supplier_name=裕德食品企業有限公司"
+            },
+            "margin": "sm"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bubble",
+      "size": "kilo",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#FFF3CD",
+        "contents": [
+          {
+            "type": "text",
+            "text": "這筆款項認不出來",
+            "weight": "bold",
+            "size": "md",
+            "color": "#333333"
+          },
+          {
+            "type": "text",
+            "text": "公司：台達2廠　筆數：4筆　金額：53,911元",
+            "size": "xs",
+            "color": "#666666"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "OCR 辨識到「雙子星食品」",
+            "size": "sm",
+            "color": "#555555",
+            "wrap": true
+          },
+          {
+            "type": "text",
+            "text": "你看是不是這幾個之一：",
+            "size": "sm",
+            "color": "#333333",
+            "margin": "md"
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "action": {
+              "type": "postback",
+              "label": "雙子星食品",
+              "data": "action=supplier_confirm&row_id=0&choice=雙子星食品&score=100.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "雙子星食品原料",
+              "data": "action=supplier_confirm&row_id=0&choice=雙子星食品原料&score=83.33333333333334"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "冷凍食品",
+              "data": "action=supplier_confirm&row_id=0&choice=冷凍食品&score=44.44444444444444"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "color": "#888888",
+            "action": {
+              "type": "postback",
+              "label": "都不是，新供應商",
+              "data": "action=supplier_new&supplier_name=雙子星食品"
+            },
+            "margin": "sm"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bubble",
+      "size": "kilo",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#FFF3CD",
+        "contents": [
+          {
+            "type": "text",
+            "text": "這筆款項認不出來",
+            "weight": "bold",
+            "size": "md",
+            "color": "#333333"
+          },
+          {
+            "type": "text",
+            "text": "公司：台達2廠　筆數：10筆　金額：65,653元",
+            "size": "xs",
+            "color": "#666666"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "OCR 辨識到「黃子儀蔬菜物流」",
+            "size": "sm",
+            "color": "#555555",
+            "wrap": true
+          },
+          {
+            "type": "text",
+            "text": "你看是不是這幾個之一：",
+            "size": "sm",
+            "color": "#333333",
+            "margin": "md"
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "action": {
+              "type": "postback",
+              "label": "黃子儀蔬菜物流",
+              "data": "action=supplier_confirm&row_id=0&choice=黃子儀蔬菜物流&score=100.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "興丁蔬菜物流",
+              "data": "action=supplier_confirm&row_id=0&choice=興丁蔬菜物流&score=61.53846153846154"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "雙子星食品",
+              "data": "action=supplier_confirm&row_id=0&choice=雙子星食品&score=16.666666666666664"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "color": "#888888",
+            "action": {
+              "type": "postback",
+              "label": "都不是，新供應商",
+              "data": "action=supplier_new&supplier_name=黃子儀蔬菜物流"
+            },
+            "margin": "sm"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bubble",
+      "size": "kilo",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#FFF3CD",
+        "contents": [
+          {
+            "type": "text",
+            "text": "這筆款項認不出來",
+            "weight": "bold",
+            "size": "md",
+            "color": "#333333"
+          },
+          {
+            "type": "text",
+            "text": "公司：台達2廠　待確認",
+            "size": "xs",
+            "color": "#666666"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "OCR 辨識到「（未識別）」",
+            "size": "sm",
+            "color": "#555555",
+            "wrap": true
+          },
+          {
+            "type": "text",
+            "text": "你看是不是這幾個之一：",
+            "size": "sm",
+            "color": "#333333",
+            "margin": "md"
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "action": {
+              "type": "postback",
+              "label": "台吉電2廠（廢油回收）",
+              "data": "action=supplier_confirm&row_id=0&choice=台吉電2廠（廢油回收）&score=25.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "清新蛋行",
+              "data": "action=supplier_confirm&row_id=0&choice=清新蛋行&score=0.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "大興米糧行",
+              "data": "action=supplier_confirm&row_id=0&choice=大興米糧行&score=0.0"
+            },
+            "margin": "sm"
+          },
+          {
+            "type": "button",
+            "style": "secondary",
+            "color": "#888888",
+            "action": {
+              "type": "postback",
+              "label": "都不是，新供應商",
+              "data": "action=supplier_new&supplier_name=（未識別）"
+            },
+            "margin": "sm"
+          }
+        ]
+      }
+    }
+  ]
+}

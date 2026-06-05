@@ -16,18 +16,18 @@ def _ensure_output_dir(year_month: str) -> str:
     return d
 
 
-def _get_income_data(year_month: str) -> dict:
+def _get_income_data(year_month: str, company_id: int = None) -> dict:
     """取得收入資料"""
     import state_manager as sm
-    income_rows = sm.get_income_summary(year_month)
+    income_rows = sm.get_income_summary(year_month, company_id=company_id)
     total = sum(r.get("amount", 0) for r in income_rows)
     return {"rows": income_rows, "total": total}
 
 
-def _get_expense_data(year_month: str) -> dict:
+def _get_expense_data(year_month: str, company_id: int = None) -> dict:
     """取得支出資料（按分類）"""
     import state_manager as sm
-    stagings = sm.get_stagings_by_month(year_month)
+    stagings = sm.get_stagings_by_month(year_month, company_id=company_id)
     cat_totals = {}
     total = 0
     for s in stagings:
@@ -50,8 +50,13 @@ def _get_monthly_cost_data(year_month: str) -> dict:
     }
 
 
-def generate_balance_sheet(year_month: str, output_dir: str = None) -> str | None:
-    """生成資產負債表"""
+def generate_balance_sheet(year_month: str, output_dir: str = None,
+                           company_id: int = None) -> str | None:
+    """生成資產負債表
+
+    Args:
+        company_id: 指定公司 (None = 全公司合併)
+    """
     try:
         import openpyxl
         from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
@@ -60,10 +65,12 @@ def generate_balance_sheet(year_month: str, output_dir: str = None) -> str | Non
         return None
 
     out = output_dir or _ensure_output_dir(year_month)
+    if company_id:
+        out = os.path.join(out, f"C{company_id}")
     os.makedirs(out, exist_ok=True)
 
-    income = _get_income_data(year_month)
-    expense = _get_expense_data(year_month)
+    income = _get_income_data(year_month, company_id=company_id)
+    expense = _get_expense_data(year_month, company_id=company_id)
     cost = _get_monthly_cost_data(year_month)
 
     wb = openpyxl.Workbook()
@@ -167,7 +174,8 @@ def generate_balance_sheet(year_month: str, output_dir: str = None) -> str | Non
     ws.column_dimensions["C"].width = 6
     ws.column_dimensions["D"].width = 18
 
-    filename = f"{year_month}_資產負債表.xlsx"
+    company_suffix = f"_C{company_id}" if company_id else ""
+    filename = f"{year_month}_資產負債表{company_suffix}.xlsx"
     filepath = os.path.join(out, filename)
     from services.excel_merge import save_with_shadow
     save_with_shadow(wb, filepath)
@@ -175,8 +183,13 @@ def generate_balance_sheet(year_month: str, output_dir: str = None) -> str | Non
     return filepath
 
 
-def generate_income_statement(year_month: str, output_dir: str = None) -> str | None:
-    """生成損益表"""
+def generate_income_statement(year_month: str, output_dir: str = None,
+                              company_id: int = None) -> str | None:
+    """生成損益表
+
+    Args:
+        company_id: 指定公司 (None = 全公司合併)
+    """
     try:
         import openpyxl
         from openpyxl.styles import Font, Alignment
@@ -185,10 +198,12 @@ def generate_income_statement(year_month: str, output_dir: str = None) -> str | 
         return None
 
     out = output_dir or _ensure_output_dir(year_month)
+    if company_id:
+        out = os.path.join(out, f"C{company_id}")
     os.makedirs(out, exist_ok=True)
 
-    income = _get_income_data(year_month)
-    expense = _get_expense_data(year_month)
+    income = _get_income_data(year_month, company_id=company_id)
+    expense = _get_expense_data(year_month, company_id=company_id)
     cost = _get_monthly_cost_data(year_month)
 
     wb = openpyxl.Workbook()
@@ -276,7 +291,8 @@ def generate_income_statement(year_month: str, output_dir: str = None) -> str | 
     ws.column_dimensions["C"].width = 6
     ws.column_dimensions["D"].width = 18
 
-    filename = f"{year_month}_損益表.xlsx"
+    company_suffix = f"_C{company_id}" if company_id else ""
+    filename = f"{year_month}_損益表{company_suffix}.xlsx"
     filepath = os.path.join(out, filename)
     from services.excel_merge import save_with_shadow
     save_with_shadow(wb, filepath)
@@ -284,8 +300,13 @@ def generate_income_statement(year_month: str, output_dir: str = None) -> str | 
     return filepath
 
 
-def generate_cash_flow(year_month: str, output_dir: str = None) -> str | None:
-    """生成現金流量表"""
+def generate_cash_flow(year_month: str, output_dir: str = None,
+                       company_id: int = None) -> str | None:
+    """生成現金流量表
+
+    Args:
+        company_id: 指定公司 (None = 全公司合併)
+    """
     try:
         import openpyxl
         from openpyxl.styles import Font, Alignment
@@ -294,10 +315,12 @@ def generate_cash_flow(year_month: str, output_dir: str = None) -> str | None:
         return None
 
     out = output_dir or _ensure_output_dir(year_month)
+    if company_id:
+        out = os.path.join(out, f"C{company_id}")
     os.makedirs(out, exist_ok=True)
 
-    income = _get_income_data(year_month)
-    expense = _get_expense_data(year_month)
+    income = _get_income_data(year_month, company_id=company_id)
+    expense = _get_expense_data(year_month, company_id=company_id)
     cost = _get_monthly_cost_data(year_month)
 
     wb = openpyxl.Workbook()
@@ -381,7 +404,8 @@ def generate_cash_flow(year_month: str, output_dir: str = None) -> str | None:
     ws.column_dimensions["C"].width = 14
     ws.column_dimensions["D"].width = 18
 
-    filename = f"{year_month}_現金流量表.xlsx"
+    company_suffix = f"_C{company_id}" if company_id else ""
+    filename = f"{year_month}_現金流量表{company_suffix}.xlsx"
     filepath = os.path.join(out, filename)
     from services.excel_merge import save_with_shadow
     save_with_shadow(wb, filepath)
@@ -389,8 +413,13 @@ def generate_cash_flow(year_month: str, output_dir: str = None) -> str | None:
     return filepath
 
 
-def generate_equity_changes(year_month: str, output_dir: str = None) -> str | None:
-    """生成權益變動表"""
+def generate_equity_changes(year_month: str, output_dir: str = None,
+                            company_id: int = None) -> str | None:
+    """生成權益變動表
+
+    Args:
+        company_id: 指定公司 (None = 全公司合併)
+    """
     try:
         import openpyxl
         from openpyxl.styles import Font, Alignment
@@ -399,10 +428,12 @@ def generate_equity_changes(year_month: str, output_dir: str = None) -> str | No
         return None
 
     out = output_dir or _ensure_output_dir(year_month)
+    if company_id:
+        out = os.path.join(out, f"C{company_id}")
     os.makedirs(out, exist_ok=True)
 
-    income = _get_income_data(year_month)
-    expense = _get_expense_data(year_month)
+    income = _get_income_data(year_month, company_id=company_id)
+    expense = _get_expense_data(year_month, company_id=company_id)
     cost = _get_monthly_cost_data(year_month)
 
     wb = openpyxl.Workbook()
@@ -479,7 +510,8 @@ def generate_equity_changes(year_month: str, output_dir: str = None) -> str | No
     ws.column_dimensions["C"].width = 16
     ws.column_dimensions["D"].width = 16
 
-    filename = f"{year_month}_權益變動表.xlsx"
+    company_suffix = f"_C{company_id}" if company_id else ""
+    filename = f"{year_month}_權益變動表{company_suffix}.xlsx"
     filepath = os.path.join(out, filename)
     from services.excel_merge import save_with_shadow
     save_with_shadow(wb, filepath)
