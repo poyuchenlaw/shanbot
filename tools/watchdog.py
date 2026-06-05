@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""shanbot watchdog — 三條業務 invariant 自動巡檢，違反就 LINE 推 admin。
+"""shanbot watchdog — 四條業務 invariant 自動巡檢，違反就 LINE 推 admin。
 
 每天 09:00 由 PM2 cron 跑（見 ecosystem.config.js 的 watchdog app）。
 也可手動：python3 tools/watchdog.py --dry-run
 
-三條 invariant：
+四條 invariant：
   I1. pending > N 天 = 異常        （default N=7）
   I2. 月報表 > M 天沒更新 = 異常    （default M=14）
   I3. GDrive 實檔數 ≠ DB confirmed 數 = 異常（含根目錄 fallback）
+  I4. 近 24h OCR 0% 信心 streak = 異常
 
 退出碼：0 = 全綠，1 = 至少一條違反
 """
@@ -15,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import sqlite3
 import sys
 from datetime import datetime
 from typing import Optional
@@ -122,6 +124,47 @@ def check_gdrive_db_drift() -> list[dict]:
     return alerts
 
 
+def check_ocr_zero_streak() -> list[dict]:
+    """I4：近 24h OCR 0% 信心比例異常，偵測 OCR 引擎全滅。"""
+    try:
+        with sqlite3.connect(sm.DB_PATH) as conn:
+            total, zero = conn.execute(
+                """
+                SELECT
+                    COUNT(*) AS total,
+                    SUM(CASE WHEN ocr_confidence = 0 THEN 1 ELSE 0 END) AS zero
+                FROM purchase_staging
+                WHERE created_at >= datetime('now','-1 day')
+                """
+            ).fetchone()
+    except Exception as e:
+        return [{
+            "invariant": "I4",
+            "level": "critical",
+            "msg": f"OCR 0% streak 檢查失敗：{e}",
+        }]
+
+    total = int(total or 0)
+    zero = int(zero or 0)
+    if total >= 3 and zero == total:
+        return [{
+            "invariant": "I4",
+            "level": "critical",
+            "total": total,
+            "zero": zero,
+            "msg": f"🚨 OCR 引擎疑似全滅：近24h {total} 筆全部 0% 信心，請檢查 gemini/claude CLI 認證與 pm2 env",
+        }]
+    if zero >= 5:
+        return [{
+            "invariant": "I4",
+            "level": "warn",
+            "total": total,
+            "zero": zero,
+            "msg": f"⚠️ OCR 失敗偏高：近24h {zero}/{total} 筆 0% 信心",
+        }]
+    return []
+
+
 def push_to_admin(alerts: list[dict], dry_run: bool):
     """把所有 alert 統一彙總一則，推給 ADMIN_LINE_USER_ID 環境變數設定的對象。"""
     admin_id = os.environ.get("SHANBOT_ADMIN_LINE_ID", "")
@@ -182,6 +225,12 @@ def main():
         for a in a3:
             print(f"  ⚠️  {a['msg']}")
         all_alerts.extend(a3)
+
+    print("\n[I4] 檢查 OCR 0% 信心 streak（近 24h）...")
+    a4 = check_ocr_zero_streak()
+    for a in a4:
+        print(f"  ⚠️  {a['msg']}")
+    all_alerts.extend(a4)
 
     print(f"\n{'='*60}")
     print(f"總計 {len(all_alerts)} 條告警")
