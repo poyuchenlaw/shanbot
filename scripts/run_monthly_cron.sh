@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
-# cron: 15 8 1 * * cd /home/simon/shanbot && scripts/run_monthly_cron.sh >> logs/monthly_cron.log 2>&1
+# cron: 0 5 1 * * /home/simon/shanbot/scripts/run_monthly_cron.sh >> /home/simon/shanbot/logs/monthly_report.log 2>&1
 set -euo pipefail
+
+# Gmail 寄送 token：nomis token 已撤銷（invalid_grant 6/5），改用 edu_blogger（含 gmail.send，6/5 驗活）
+export GMAIL_TOKEN_PATH="${GMAIL_TOKEN_PATH:-/home/simon/.google-oauth/edu_blogger_token.json}"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
