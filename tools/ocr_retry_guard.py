@@ -25,13 +25,16 @@ LOCK_PATH = Path("/tmp/ocr_retry_guard.lock")
 LOG_PATH = ROOT / "logs" / "ocr_retry_guard.jsonl"
 DOCTOR_FLAG_PATH = ROOT / "data" / ".ocr_doctor_last_run"
 DOCTOR_COOLDOWN_SECONDS = 6 * 60 * 60
+# escalated=1 的記錄已交醫生 session 處理過並通報人類，哨兵不再糾纏（防絕望件每 6h 重複出動醫生）
 STALE_ZERO_SQL = """
-SELECT id
-FROM purchase_staging
-WHERE status='pending'
-  AND ocr_confidence=0
-  AND created_at <= datetime('now','localtime','-20 minutes')
-ORDER BY id
+SELECT p.id
+FROM purchase_staging p
+LEFT JOIN ocr_retry_log r ON r.staging_id = p.id
+WHERE p.status='pending'
+  AND p.ocr_confidence=0
+  AND p.created_at <= datetime('now','localtime','-20 minutes')
+  AND COALESCE(r.escalated, 0) = 0
+ORDER BY p.id
 """
 
 
