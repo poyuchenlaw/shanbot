@@ -285,6 +285,11 @@ def _step_accounting_excel(year_month: str, company_id: int = None) -> dict:
     """
     from services.accounting_service import generate_accounting_excel
 
+    journal_entries = sm.get_journal_entries(year_month, company_id=company_id)
+    if len(journal_entries) == 0:
+        logger.warning(f"{year_month} 無分錄，跳過帳冊產出避免空殼上雲")
+        return {"step": "accounting_excel", "status": "no_data", "files": []}
+
     boss_path = None
     staff_path = None
     failed_variant = None

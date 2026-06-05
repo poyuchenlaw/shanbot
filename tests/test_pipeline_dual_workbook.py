@@ -42,6 +42,7 @@ def _seed_test_data(tmpdir: str):
 
     import services.accounting_service
     importlib.reload(services.accounting_service)
+    services.accounting_service.generate_journal_entries(sid1)
     import services.staff_workbook_service
     importlib.reload(services.staff_workbook_service)
     import services.pipeline_service

@@ -188,7 +188,7 @@ async def handle_text(line_service, text: str, group_id: str,
         return _show_accounting_summary(accounting_match.group(1))
 
     if text_lower in ("更新帳冊", "生成帳冊"):
-        return await _generate_accounting_excel()
+        return await _generate_accounting_excel(company_id)
 
     # 期末結帳
     closing_match = re.match(r"結帳\s*(\d{4}-\d{2})", text_lower)
@@ -1807,14 +1807,21 @@ def _show_accounting_summary(year_month: str = None) -> str:
         return f"⚠️ 會計資料讀取失敗：{e}"
 
 
-async def _generate_accounting_excel() -> str:
+async def _generate_accounting_excel(company_id: int = 1) -> str:
     """手動觸發月度帳冊生成"""
     year_month = datetime.now().strftime("%Y-%m")
     try:
         from services.accounting_service import generate_accounting_excel
-        path = generate_accounting_excel(year_month)
-        if path:
-            return f"✅ {year_month} 會計帳冊已更新\n📁 {path}"
+        boss_path = generate_accounting_excel(year_month, company_id=company_id, variant="boss")
+        staff_path = generate_accounting_excel(year_month, company_id=company_id, variant="staff")
+        if boss_path and staff_path:
+            return (
+                f"✅ {year_month} 會計帳冊已更新\n"
+                f"📁 {boss_path}\n"
+                f"📁 {staff_path}\n"
+                "含：📒 小魚決策帳冊（8 表：索引/進貨日記帳/月度費用彙總/試算表/"
+                "分錄明細/損益表/資產負債表/總分類帳）+ 📗 員工驗章帳冊（4 表）"
+            )
         return "⚠️ 帳冊生成失敗"
     except Exception as e:
         logger.error(f"Excel generation error: {e}")

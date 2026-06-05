@@ -86,6 +86,22 @@ def _fetch_rows(ids: list[int]) -> dict[int, dict[str, Any]]:
     return {int(r["id"]): dict(r) for r in rows}
 
 
+def _fetch_confirmed_rows() -> list[dict[str, Any]]:
+    with _conn() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, company_id, status, purchase_date, supplier_name,
+                   invoice_number, subtotal, tax_amount, total_amount, gdrive_path
+            FROM purchase_staging
+            WHERE status='confirmed'
+              AND gdrive_path IS NOT NULL
+              AND gdrive_path != ''
+            ORDER BY id
+            """
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
 def _company_folders() -> dict[int, str]:
     with _conn() as conn:
         rows = conn.execute("SELECT id, gdrive_folder FROM companies").fetchall()
@@ -284,6 +300,73 @@ def _find_misplaced() -> list[dict[str, Any]]:
     return plans
 
 
+def _find_misplaced_from_db() -> list[dict[str, Any]]:
+    rows = _fetch_confirmed_rows()
+    folders = _company_folders()
+    known_folders = set(folders.values())
+    plans: list[dict[str, Any]] = []
+
+    for row in rows:
+        staging_id = int(row["id"])
+        company_id = int(row.get("company_id") or 0)
+        correct_folder = folders.get(company_id)
+        current_rel = row.get("gdrive_path") or ""
+        if os.path.isabs(current_rel):
+            try:
+                current_rel = os.path.relpath(current_rel, GDRIVE_LOCAL)
+            except ValueError:
+                plans.append({
+                    "staging_id": staging_id,
+                    "company_id": company_id,
+                    "status": "skipped_no_company_segment",
+                    "reason": "absolute path outside GDRIVE_LOCAL",
+                    "old_gdrive_path": row.get("gdrive_path"),
+                })
+                continue
+
+        current_folder = _first_segment(current_rel)
+        if not correct_folder:
+            plans.append({
+                "staging_id": staging_id,
+                "company_id": company_id,
+                "status": "missing_company_folder",
+                "old_gdrive_path": current_rel,
+            })
+            continue
+
+        # Legacy flat paths such as 2026/03月/... have no company segment.
+        # They are intentionally outside this repair batch.
+        if current_folder not in known_folders:
+            plans.append({
+                "staging_id": staging_id,
+                "company_id": company_id,
+                "status": "skipped_no_company_segment",
+                "old_gdrive_path": current_rel,
+            })
+            continue
+
+        if current_folder == correct_folder:
+            continue
+
+        new_rel = _correct_rel(current_rel, correct_folder)
+        plans.append({
+            "staging_id": staging_id,
+            "company_id": company_id,
+            "supplier": row.get("supplier_name"),
+            "amount": row.get("total_amount"),
+            "status": "planned",
+            "old_gdrive_path": current_rel,
+            "new_gdrive_path": new_rel,
+            "old_abs": _abs_from_rel(current_rel),
+            "new_abs": _abs_from_rel(new_rel),
+            "filename": os.path.basename(current_rel),
+            "year_month": _year_month_from_rel(new_rel),
+            "row": row,
+            "source": "db",
+        })
+    return plans
+
+
 def _apply_plan(plan: dict[str, Any]) -> dict[str, Any]:
     old_abs = plan["old_abs"]
     new_abs = plan["new_abs"]
@@ -341,7 +424,7 @@ def _run(args: argparse.Namespace) -> int:
     log_dir = Path("logs")
     log_dir.mkdir(exist_ok=True)
     audit_path = log_dir / f"fix_misplaced_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jsonl"
-    plans = _find_misplaced()
+    plans = _find_misplaced_from_db() if args.from_db else _find_misplaced()
 
     summary = {
         "dry_run": args.dry_run,
@@ -351,12 +434,14 @@ def _run(args: argparse.Namespace) -> int:
         "residual_cleaned": 0,
         "already_moved_db_updated": 0,
         "skipped_non_confirmed": sum(1 for p in plans if p.get("status") == "skipped_non_confirmed"),
+        "skipped_no_company_segment": sum(1 for p in plans if p.get("status") == "skipped_no_company_segment"),
         "missing_db_row": sum(1 for p in plans if p.get("status") == "missing_db_row"),
         "missing_company_folder": sum(1 for p in plans if p.get("status") == "missing_company_folder"),
         "error": 0,
         "affected_indexes": [],
     }
     affected: set[tuple[int, str]] = set()
+    printed = 0
 
     with audit_path.open("w", encoding="utf-8") as audit:
         for idx, plan in enumerate(plans, start=1):
@@ -379,8 +464,9 @@ def _run(args: argparse.Namespace) -> int:
                     affected.add((int(event["company_id"]), event["year_month"]))
 
             audit.write(json.dumps({"ts": datetime.now().isoformat(), **_event_for_log(event)}, ensure_ascii=False) + "\n")
-            if args.dry_run and plan.get("status") in {"planned", "cleanup_residual"} and idx <= args.print_first:
+            if args.dry_run and plan.get("status") in {"planned", "cleanup_residual"} and printed < args.print_first:
                 print(json.dumps(_event_for_log(event), ensure_ascii=False))
+                printed += 1
             elif not args.dry_run and plan.get("status") in {"planned", "cleanup_residual"}:
                 print(json.dumps(_event_for_log(event), ensure_ascii=False))
 
@@ -400,6 +486,8 @@ def _run(args: argparse.Namespace) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Move misplaced backfill archives to the correct company folder")
+    parser.add_argument("--from-db", action="store_true",
+                        help="Scan confirmed purchase_staging rows directly instead of backfill logs")
     parser.add_argument("--dry-run", action="store_true", help="Print planned moves without touching files or DB")
     parser.add_argument("--print-first", type=int, default=5, help="Number of dry-run plans to print")
     args = parser.parse_args()

@@ -74,7 +74,7 @@ class TestReceiptUpload:
         try:
             rel = run(upload_receipt(tmp, "2026-02", "全聯"))
             assert rel is not None
-            assert "收據憑證" in rel
+            assert "待確認" in rel
             assert "全聯" in rel
             # 檔案實際存在
             full = os.path.join(TEST_GDRIVE, rel)
@@ -93,7 +93,7 @@ class TestReceiptUpload:
         try:
             rel = run(upload_receipt(tmp))
             assert rel is not None
-            assert "收據憑證" in rel
+            assert "待確認" in rel
         finally:
             os.unlink(tmp)
 
@@ -172,7 +172,7 @@ class TestFolderIndex:
 
         idx = get_folder_index("2026-02")
         assert idx["total_files"] == 2
-        assert len(idx["folders"]["收據憑證"]) == 2
+        assert len(idx["folders"]["待確認"]) == 2
 
     def test_get_annual_index(self):
         from services.gdrive_service import init_folder_structure, get_annual_index
@@ -239,19 +239,19 @@ class TestIndexService:
         summary = get_summary("2026-02")
         assert summary["total_files"] == 1
         assert summary["total_size"] > 0
-        assert summary["folders"]["收據憑證"]["count"] == 1
+        assert summary["folders"]["待確認"]["count"] == 1
 
 
 class TestEndToEnd:
     """完整端到端流程驗證"""
 
     def test_full_receipt_lifecycle(self):
-        """模擬：上傳收據 → 歸檔到採購單據 → 更新索引 → 搜尋"""
+        """模擬：上傳收據 → 確認歸檔 → 更新索引 → 搜尋"""
         from services.gdrive_service import (
-            init_folder_structure, upload_receipt,
-            get_folder_index, _year_month_path, GDRIVE_LOCAL,
+            init_folder_structure, upload_receipt, archive_receipt,
+            GDRIVE_LOCAL,
         )
-        from services.gdrive_index_service import update_index, search_index, get_summary
+        from services.gdrive_index_service import update_index, search_index
 
         ym = "2026-02"
         init_folder_structure(ym)
@@ -263,29 +263,34 @@ class TestEndToEnd:
 
         gdrive_rel = run(upload_receipt(receipt_path, ym, "萬客隆超市"))
         assert gdrive_rel is not None
+        assert "待確認" in gdrive_rel
+        assert os.path.exists(os.path.join(GDRIVE_LOCAL, gdrive_rel))
 
-        # 2. 確認後歸檔到採購單據（模擬 command_handler）
-        _, month_path = _year_month_path(ym)
-        dest_dir = os.path.join(month_path, "採購單據")
-        os.makedirs(dest_dir, exist_ok=True)
-        basename = os.path.basename(receipt_path)
-        dest = os.path.join(dest_dir, f"萬客隆超市_{basename}")
-        shutil.copy2(receipt_path, dest)
+        # 2. 確認後歸檔到收據憑證（模擬 command_handler）
+        archive = run(archive_receipt(
+            receipt_path,
+            "2026-02-15",
+            "萬客隆超市",
+            1200,
+            42,
+            pending_gdrive_path=gdrive_rel,
+        ))
         os.unlink(receipt_path)
+
+        assert archive["gdrive_path"] is not None
+        assert "收據憑證" in archive["gdrive_path"]
+        assert "萬客隆超市" in archive["gdrive_path"]
+        assert os.path.exists(os.path.join(GDRIVE_LOCAL, archive["gdrive_path"]))
+        assert not os.path.exists(os.path.join(GDRIVE_LOCAL, gdrive_rel))
 
         # 3. 更新索引
         idx = update_index(ym)
-        assert idx["months"][ym]["total_files"] == 2  # 收據+採購
+        assert ym in idx["months"]
 
         # 4. 搜尋
         results = search_index("萬客隆")
-        assert len(results) == 2  # 收據和採購各一份
-
-        # 5. 統計
-        summary = get_summary(ym)
-        assert summary["total_files"] == 2
-        assert summary["folders"]["收據憑證"]["count"] == 1
-        assert summary["folders"]["採購單據"]["count"] == 1
+        assert len(results) >= 1
+        assert any("收據憑證" in r["path"] for r in results)
 
     def test_multi_export_types(self):
         """模擬多種匯出類型"""

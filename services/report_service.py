@@ -264,7 +264,10 @@ def generate_annual_report(year: str, output_dir: str = None,
 
     for m in range(1, 13):
         ym = f"{year}-{m:02d}"
-        stats = sm.get_staging_stats(ym, company_id=company_id)
+        if company_id is None:
+            stats = sm.get_staging_stats(ym)
+        else:
+            stats = sm.get_staging_stats(ym, company_id=company_id)
         total_count = stats.get("total", 0) or 0
         if total_count == 0:
             continue
@@ -308,7 +311,10 @@ def generate_annual_report(year: str, output_dir: str = None,
     cat_totals = {}
     for m in range(1, 13):
         ym = f"{year}-{m:02d}"
-        stagings = sm.get_stagings_by_month(ym, company_id=company_id)
+        if company_id is None:
+            stagings = sm.get_stagings_by_month(ym)
+        else:
+            stagings = sm.get_stagings_by_month(ym, company_id=company_id)
         for s in stagings:
             items = sm.get_purchase_items(s["id"])
             for item in items:

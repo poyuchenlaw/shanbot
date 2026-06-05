@@ -457,14 +457,14 @@ class TestOcrGemini(unittest.TestCase):
     @patch("services.ocr_service.GEMINI_API_KEY", "")
     def test_no_api_key(self):
         from services.ocr_service import ocr_gemini
-        result = ocr_gemini("/fake/image.jpg")
+        with patch.dict(os.environ, {"GEMINI_CLI_BIN": "/nonexistent/gemini"}, clear=False):
+            result = ocr_gemini("/fake/image.jpg")
         self.assertIsNone(result)
 
     @patch("services.ocr_service.GEMINI_API_KEY", "test-key")
     def test_success(self):
         from services.ocr_service import ocr_gemini
         import tempfile
-        import requests as real_requests
 
         # Create a fake image file
         with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
@@ -485,8 +485,11 @@ class TestOcrGemini(unittest.TestCase):
                     },
                 }],
             }
-            with patch("requests.post", return_value=mock_resp):
+            with patch.dict(os.environ, {"GEMINI_CLI_BIN": "/nonexistent/gemini"}, clear=False), \
+                 patch("requests.post", return_value=mock_resp), \
+                 patch("services.ocr_service._ocr_gemini_cli") as mock_cli:
                 result = ocr_gemini(temp_path)
+            mock_cli.assert_not_called()
             self.assertIsNotNone(result)
             self.assertEqual(result["supplier_name"], "好鮮水產行")
         finally:
@@ -505,8 +508,11 @@ class TestOcrGemini(unittest.TestCase):
             mock_resp = MagicMock()
             mock_resp.status_code = 500
             mock_resp.text = "Internal Server Error"
-            with patch("requests.post", return_value=mock_resp):
+            with patch.dict(os.environ, {"GEMINI_CLI_BIN": "/nonexistent/gemini"}, clear=False), \
+                 patch("requests.post", return_value=mock_resp), \
+                 patch("services.ocr_service._ocr_gemini_cli") as mock_cli:
                 result = ocr_gemini(temp_path)
+            mock_cli.assert_not_called()
             self.assertIsNone(result)
         finally:
             os.unlink(temp_path)

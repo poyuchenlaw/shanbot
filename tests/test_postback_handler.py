@@ -336,13 +336,21 @@ class TestPurchaseActions(unittest.TestCase):
         with patch.dict("sys.modules", {
             "services.market_service": MagicMock(
                 get_market_summary=MagicMock(return_value={
-                    "蔬菜": [
-                        {"品名": "高麗菜", "平均價": 25},
-                        {"品名": "白菜", "平均價": 20},
-                    ],
-                    "水果": [
-                        {"品名": "蘋果", "平均價": 80},
-                    ],
+                    "categories": {
+                        "蔬菜": {
+                            "count": 2,
+                            "sample": [
+                                {"name": "高麗菜", "avg_price": 25},
+                                {"name": "白菜", "avg_price": 20},
+                            ],
+                        },
+                        "水果": {
+                            "count": 1,
+                            "sample": [
+                                {"name": "蘋果", "avg_price": 80},
+                            ],
+                        },
+                    },
                 })
             )
         }):

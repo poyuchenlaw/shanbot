@@ -93,9 +93,13 @@ generate_balance_sheet("2026-03", output_dir="/tmp")
 generate_income_statement("2026-03", output_dir="/tmp")
 
 # 稅務匯出
-from services.tax_export_service import export_mof_txt, export_accounting_excel
+from services.tax_export_service import export_mof_txt
 export_mof_txt("2026-01-02", output_dir="/tmp")  # 期間: YYYY-MM 雙月
-export_accounting_excel("2026-01-02", output_dir="/tmp")
+
+# 生成單月會計帳冊
+from services.accounting_service import generate_accounting_excel
+generate_accounting_excel("2026-03", company_id=1, variant="boss")
+generate_accounting_excel("2026-03", company_id=1, variant="staff")
 
 # 月結
 from services.report_service import generate_monthly_report

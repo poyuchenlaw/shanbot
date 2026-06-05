@@ -38,7 +38,7 @@ async def handle_postback(line_service, data_str: str, group_id: str,
 
     # === 子動作 ===
     if action == "report":
-        await _handle_report(line_service, params, group_id, reply_token)
+        await _handle_report(line_service, params, group_id, reply_token, company_id)
     elif action == "purchase":
         await _handle_purchase(line_service, params, group_id, reply_token)
     elif action == "menu":
@@ -110,7 +110,8 @@ def _handle_menu(menu: str, group_id: str = None, company_id: int = None) -> dic
 
 # === 財務報表 ===
 
-async def _handle_report(line_service, params: dict, group_id: str, reply_token: str):
+async def _handle_report(line_service, params: dict, group_id: str, reply_token: str,
+                         company_id: int = 1):
     report_type = params.get("type", "")
     period = params.get("period", "month")
     ym = params.get("ym", "")
@@ -128,7 +129,7 @@ async def _handle_report(line_service, params: dict, group_id: str, reply_token:
     elif report_type == "accounting_summary":
         _gen_accounting_summary(line_service, ym, reply_token)
     elif report_type == "accounting_excel":
-        _gen_accounting_excel(line_service, ym, reply_token)
+        _gen_accounting_excel(line_service, ym, reply_token, company_id)
     elif report_type == "trial_balance":
         _gen_trial_balance(line_service, ym, reply_token)
     else:
@@ -217,16 +218,20 @@ def _gen_accounting_summary(line_service, ym: str, reply_token: str):
         line_service.reply(reply_token, f"⚠️ 會計資料讀取失敗：{e}")
 
 
-def _gen_accounting_excel(line_service, ym: str, reply_token: str):
+def _gen_accounting_excel(line_service, ym: str, reply_token: str,
+                          company_id: int = 1):
     """生成會計帳冊 Excel"""
     try:
         from services.accounting_service import generate_accounting_excel
-        path = generate_accounting_excel(ym)
-        if path:
+        boss_path = generate_accounting_excel(ym, company_id=company_id, variant="boss")
+        staff_path = generate_accounting_excel(ym, company_id=company_id, variant="staff")
+        if boss_path and staff_path:
             line_service.reply(reply_token,
                                f"✅ {ym} 會計帳冊已生成\n"
                                f"📁 會計帳冊/{ym}/\n"
-                               f"含：進貨日記帳 + 費用彙總 + 試算表 + 分錄明細")
+                               "含：📒 小魚決策帳冊（8 表：索引/進貨日記帳/月度費用彙總/試算表/"
+                               "分錄明細/損益表/資產負債表/總分類帳）+ "
+                               "📗 員工驗章帳冊（4 表）")
         else:
             line_service.reply(reply_token, "⚠️ 帳冊生成失敗")
     except Exception as e:

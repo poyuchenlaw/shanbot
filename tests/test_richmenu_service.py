@@ -41,7 +41,7 @@ class TestRichMenuJson(unittest.TestCase):
 
     def test_postback_data_values(self):
         expected = ["menu=camera", "menu=finance_upload", "menu=purchase",
-                    "menu=menu_plan", "menu=reports", "menu=guide"]
+                    "menu=issue_feedback", "menu=reports", "menu=guide"]
         actual = [a["action"]["data"] for a in RICHMENU_JSON["areas"]]
         self.assertEqual(actual, expected)
 
